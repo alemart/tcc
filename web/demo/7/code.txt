@@ -1,0 +1,173 @@
+' =====================================
+'              _  _      _   _
+'  |/ | |  |  |_ |_)    |_) |_| |  |
+'  |\ | |_ |_ |_ | \    |_) | | |_ |_
+'
+' Copyright (C) 2011 Alexandre Martins
+'              <alemartf at gmail.com>
+'
+'    >> Use o mouse para jogar <<
+'
+' =====================================
+
+' -------------------------------------
+' inicializações
+' -------------------------------------
+
+' habilita double buffering a 60 fps
+gameMode
+
+' mostra mensagem de boas vindas
+console "Use o mouse para jogar"
+
+' -------------------------------------
+' variáveis
+' -------------------------------------
+timeout = 10
+gravity = 1.5
+deceleration = 0.1
+ground = screenHeight() - 70
+
+myX = 0
+myY = 0
+myOldX = 0
+myOldY = 0
+myRadius = 10
+
+otherX = screenWidth()/2
+otherY = ground - 100
+otherSpeedX = 0
+otherSpeedY = 0
+otherRadius = 20
+
+dangerX = 0
+dangerY = -100
+dangerSpeedX = 3
+dangerSpeedY = 0
+dangerRadius = 5
+
+' -------------------------------------
+' loop principal do jogo
+' -------------------------------------
+do
+    ' limpa a tela
+    cls
+
+    ' move cursor
+    myOldX = myX
+    myOldY = myY
+    myX = mouseX()
+    myY = mouseY()
+
+    ' move a bolinha vermelha
+    if otherX + otherRadius >= screenWidth() then otherSpeedX = -abs(otherSpeedX)
+    if otherX - otherRadius < 0 then otherSpeedX = abs(otherSpeedX)
+    if otherSpeedX > 0 then otherSpeedX = max(0, otherSpeedX - deceleration)
+    if otherSpeedX < 0 then otherSpeedX = min(0, otherSpeedX + deceleration)
+    if otherY + otherRadius >= ground then
+        otherSpeedY = -0.8 * abs(otherSpeedY)
+        if abs(otherSpeedY) < 1 then otherSpeedY = 0
+    else
+        otherSpeedY += gravity
+    endif
+    otherX += otherSpeedX
+    otherY += otherSpeedY
+
+    ' detecta colisao entre as bolinhas amarela e vermelha
+    if dist(myX, myY, otherX, otherY) < myRadius + otherRadius then
+        ' vetor unitario que liga as duas bolinhas
+        vx = otherX - myX
+        vy = otherY - myY
+        norm = sqrt(vx^2 + vy^2)
+        vx /= norm
+        vy /= norm
+
+        ' modifica velocidade da bolinha vermelha
+        otherSpeedX = 2 * clamp(abs(myX - myOldX), 5, 10) * vx
+        otherSpeedY = 3 * clamp(abs(myY - myOldY), 5, 10) * vy
+    endif
+
+    ' move bolinha perigosa
+    dangerX += dangerSpeedX
+    dangerY += dangerSpeedY
+    if dangerX - dangerRadius > screenWidth() or dangerY - dangerRadius > screenHeight() then
+        if random(1, 3) <> 1 and timeout - 0.001 * milliseconds() >= 1.0 then
+            dangerX = otherX - 50 + random(0, 100)
+            dangerY = -dangerRadius
+            dangerSpeedX = 0
+            dangerSpeedY = 7
+        else
+            dangerX = -dangerRadius
+            dangerY = ground - dangerRadius - random(0, otherRadius*2)
+            dangerSpeedX = 3 + (milliseconds() * 0.01) / timeout
+            dangerSpeedY = 0
+        endif
+    endif
+    if timeout - 0.001 * milliseconds() < 1.0 then dangerRadius = min(30, dangerRadius + 0.7) ' surpresa!!! ;-)
+
+    ' desenha linha do chao
+    setColor 1, 1, 1
+    line 0, ground, screenWidth(), ground
+
+    ' desenha bolinha vermelha
+    setColor 1, 0, 0
+    circlefill otherX, otherY, otherRadius
+
+    ' desenha danger object
+    setColor 0, 0.8, abs(cos(0.09 * milliseconds()))
+    circlefill dangerX, dangerY, dangerRadius
+
+    ' desenha cursor do mouse
+    setColor 1, 1, 0
+    circle myX, myY, myRadius
+
+    ' tempo restante
+    setColor 1, 1, 1
+    textoutEx 10, 10, "sans-serif", 12, "Tempo restante: " + max(0, ceil(timeout - 0.001 * milliseconds())) + "s"
+
+    ' usuario ganhou / perdeu?
+    if milliseconds() > 1000 * timeout then winner
+    if dist(dangerX, dangerY, otherX, otherY) < dangerRadius + otherRadius then loser
+
+    ' atualiza tela
+    flip
+loop
+
+' -------------------------------------
+' vencedor
+' -------------------------------------
+fun winner()
+    setColor 0,0,0
+    setAlpha 0.75
+    rectfill 0, 0, screenWidth(), screenHeight()
+    setAlpha 1
+    setColor 0,1,0
+    textout 180, 100, "VENCEU!"
+    setColor 1, 1, 1
+    textoutEx 160, 150, "sans-serif", 12, "yyyyyeeeeeeeeesssss!!!!!!!"
+    flip
+    exit ' sai do jogo
+endfun
+
+' -------------------------------------
+' perdedor
+' -------------------------------------
+fun loser()
+    setColor 0,0,0
+    setAlpha 0.75
+    rectfill 0, 0, screenWidth(), screenHeight()
+    setAlpha 1
+    setColor 1, 0, 0
+    textout 200, 100, "PERDEU"
+    setColor 1, 1, 1
+    textoutEx 150, 150, "sans-serif", 12, "Compile de novo para recomeçar"
+    flip
+    exit
+endfun
+
+' -------------------------------------
+' distancia entre dois pontos
+' -------------------------------------
+fun dist(x1, y1, x2, y2)
+    return sqrt((x1-x2)^2 + (y1-y2)^2)
+endfun

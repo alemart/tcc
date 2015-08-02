@@ -1,0 +1,1390 @@
+'                .__                                                       
+'    _________   |  | _____  ___  ______.__. __  _  _______  _______ ______
+'   / ___\__  \  |  | \__  \ \  \/  <   |  | \ \/ \/ /\__  \ \_  __ |  ___/
+'  / /_/  > __ \_|  |__/ __ \_>    < \___  |  \     /  / __ \_|  | \|___ \ 
+'  \___  (____  /|____(____  /__/\_ \/ ____|   \/\_/  (____  /|__| /____  >
+' /_____/     \/           \/      \/\/                    \/           \/ 
+'
+' Copyright (C) 2011 by Alexandre Martins <alemartf at gmail.com>
+' 
+' Permission is hereby granted, free of charge, to any person obtaining a copy
+' of this software and associated documentation files (the "Software"), to deal
+' in the Software without restriction, including without limitation the rights
+' to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+' copies of the Software, and to permit persons to whom the Software is
+' furnished to do so, subject to the following conditions:
+'
+' The above copyright notice and this permission notice shall be included in
+' all copies or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+' IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+' FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+' AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+' LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+' OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+' THE SOFTWARE.
+'
+'
+' [[ HOW TO PLAY ]]
+'
+' 1. Z:      shoot;
+' 2. X:      bomb;
+' 3. Arrows: move.
+'
+'
+' [[ GAME ASSETS ]]
+'
+' References:
+' 1. opengameart.org
+' 2. lostgarden.com
+' 3. widgetworx.com (SpriteLib)
+'
+' basic_enemy.png, brain.png by Daniel Cook from Lostgarden.com (cc-by-sa 3.0)
+' player.png, projectile*.png, fire.png, bomb.png by surt (cc-by-sa 3.0)
+' explosion.png by Charlie (public domain)
+' asteroids.png, dino.png by Ari Feldman (cpl 1.0)
+' vaerionii.ogg, danger.ogg, boss*.ogg by Gobusto (cc-by-sa 3.0)
+' galaxy background by hc (cc-by-sa 3.0)
+' projectile*.ogg, explosion*.ogg, tesla_tower.ogg, gravity_bomb.ogg,
+' wolfman.ogg, volcano_eruption.ogg by Stephen M. Cameron (cc-by-sa 3.0)
+' bold.png, jug*.png by Clint Bellanger (public domain)
+' bg.jpg by Luke.RUSTLTD (public domain)
+' yeah.ogg by Blender Foundation (cc-by 3.0)
+' charge.ogg by Alexandre (cc-by-sa 3.0)
+'
+
+
+
+' ---------- // CODE // --------------
+
+
+
+' enables game mode: double buffering, 60 fps
+gameMode
+
+' -- entities --
+g_spaceobjects = createTable() ' space objects
+g_projectiles = createTable() ' projectiles
+g_enemies = createTable() ' enemies
+g_player = createPlayer() ' the player
+g_hud = createHud() ' the hud (heads-up display)
+
+' -- music --
+g_music = playMusicEx("vaerionii.ogg", -1)
+
+' -- main loop --
+do
+    cls
+    updateLogic
+    renderGame
+    flip
+loop
+
+fun updateLogic()
+    updateBackground
+    updatePlayer g_player
+    updateEnemies
+    updateProjectiles
+    updateSpaceObjects
+    updateHud g_hud
+endfun
+
+fun renderGame()
+    renderBackground
+    renderPlayer g_player
+    renderEnemies
+    renderProjectiles
+    renderSpaceObjects
+    renderHud g_hud
+endfun
+
+' -- bye! --
+destroyHud g_hud
+destroyPlayer g_player
+destroyTable g_projectiles
+destroyTable g_enemies
+destroyTable g_spaceObjects
+
+
+
+
+
+' ---------- // BACKGROUND // --------------
+fun updateBackground()
+    g_backgroundX -= 0.15
+    if g_backgroundX <= -imageWidth("bg.jpg") then g_backgroundX = 0
+endfun
+
+fun renderBackground()
+    drawImage "bg.jpg", g_backgroundX, -200
+    drawImage "bg.jpg", g_backgroundX + imageWidth("bg.jpg"), -200
+endfun
+
+
+
+
+
+
+' ---------- // PLAYER ENTITY // --------------
+
+fun createPlayer()
+    player = createTable()
+
+    player["hp"] = 100
+    player["actor"] = createActor()
+    player["bulletTimer"] = createTimer(200)
+    player["blinkStart"] = 0
+    player["blinkTimer"] = createTimer(100)
+    player["visible"] = true
+    player["blinking"] = false
+    player["explodeTimer"] = createTimer(125)
+    player["bombs"] = 3
+    player["victory"] = false
+
+    addActorAnimationEx player["actor"], "stopped", "player.png", 9, 1, 4, 1, 8, true
+    setActorAnimation player["actor"], "stopped"
+    setActorPosition player["actor"], 30, 240
+    setActorAnchor player["actor"], 24, 22
+
+    spawnSpaceObject "fire", 0, 0
+
+    return player
+endfun
+
+fun destroyPlayer(player)
+    destroyTimer player["explodeTimer"]
+    destroyTimer player["blinkTimer"]
+    destroyTimer player["bulletTimer"]
+    destroyActor player["actor"]
+    destroyTable player
+    return 0
+endfun
+
+fun updatePlayer(player)
+    actor = player["actor"]
+    animateActor actor
+
+    ' dead player?
+    if player["hp"] <= 0 then
+        player["hp"] = 0
+        player["blinking"] = false
+        if timerHasExpired(player["explodeTimer"]) then
+            resetTimer player["explodeTimer"]
+            explode actorX(actor) - actorXAnchor(actor) + random(0, actorWidth(actor)), actorY(actor) - actorYAnchor(actor) + random(0, actorHeight(actor))
+        endif
+        moveActor actor, 0, 5
+        if actorY(actor) >= 500 then
+            blinkPlayer player
+            setActorPosition actor, 30, 240
+            player["hp"] = 100
+        endif
+        return
+    endif
+
+    ' winner?
+    if player["victory"] then
+        moveActor actor, 10, 0
+        return
+    endif
+
+    ' move horizontally
+    if keyDown(g_keyRight) then moveActor actor, 5, 0
+    if keyDown(g_keyLeft) then moveActor actor, -5, 0
+    if actorX(actor) < 50 then setActorPosition actor, 50, actorY(actor)
+    if actorX(actor) > 490 then setActorPosition actor, 490, actorY(actor)
+
+    ' move vertically
+    if keyDown(g_keyDown) then moveActor actor, 0, 10
+    if keyDown(g_keyUp) then moveActor actor, 0, -10
+    if actorY(actor) < 30 then setActorPosition actor, actorX(actor), 30
+    if actorY(actor) > 450 then setActorPosition actor, actorX(actor), 450
+
+    ' shoot
+    if keyHit(g_keyZ) or (keyDown(g_keyZ) and timerHasExpired( player["bulletTimer"] )) then
+        shoot "ship1", player, actorX(actor)+20, actorY(actor), 1, 0
+        resetTimer player["bulletTimer"]
+    endif
+
+    ' bomb
+    if keyHit(g_keyX) and player["bombs"] > 0 then
+        spawnSpaceObject "bomb", actorX(actor)+20, actorY(actor)
+        player["bombs"] -= 1
+    endif
+
+    ' blinking?
+    if player["blinking"] then
+        if timerHasExpired(player["blinkTimer"]) then
+            player["visible"] = not( player["visible"] )
+            resetTimer(player["blinkTimer"])
+            if milliseconds() > player["blinkStart"] + 3000 then
+                player["blinking"] = false
+                player["visible"] = true
+            endif
+        endif
+    endif
+endfun
+
+fun renderPlayer(player)
+    if player["visible"] then drawActor player["actor"]
+endfun
+
+fun playerActor(player)
+    return player["actor"]
+endfun
+
+fun damagePlayer(player, damage)
+    if not player["blinking"] and player["hp"] > 0 then
+        player["hp"] -= damage
+        if player["hp"] < 0 then player["hp"] = 0
+        blinkPlayer player
+        return true
+    endif
+
+    return false
+endfun
+
+fun blinkPlayer(player)
+    player["blinkStart"] = milliseconds()
+    player["blinking"] = true
+    resetTimer player["blinkTimer"]
+endfun
+
+fun playerEnableVictoryMode(player)
+    player["victory"] = true
+endfun
+
+
+
+
+
+
+
+' ---------- // PROJECTILES MANAGEMENT // --------------
+
+' shoots a new projectile
+' projectile types: "default", "missile"
+' owner is the ship who created the projectile
+' (xpos, ypos) is the initial position
+' (direction_x, direction_y) is a non-zero vector
+fun shoot(type, owner, xpos, ypos, direction_x, direction_y)
+    ' adds a new projectile to the g_projectiles table
+    c = g_projectileCounter
+    g_projectileCounter += 1
+    g_projectiles[c] = createProjectile(type, owner, xpos, ypos, direction_x, direction_y)
+endfun
+
+' updates the projectiles list
+fun updateProjectiles()
+    for i in g_projectiles
+        p = g_projectiles[i]
+        updateProjectile p
+        if p["state"] = "dead" then
+            destroyProjectile p
+            removeTableEntry g_projectiles, i
+        endif
+    next
+endfun
+
+' renders the projectiles
+fun renderProjectiles()
+    for i in g_projectiles
+        renderProjectile g_projectiles[i]
+    next
+endfun
+
+
+
+
+' ---------- // PROJECTILE ENTITY // --------------
+
+fun createProjectile(type, owner, xpos, ypos, direction_x, direction_y)
+    proj = createTable()
+    snd = ""
+
+    proj["type"] = type
+    proj["state"] = "alive"
+    proj["dirx"] = direction_x / sqrt( direction_x^2 + direction_y^2 )
+    proj["diry"] = direction_y / sqrt( direction_x^2 + direction_y^2 )
+    proj["owner"] = owner
+    proj["actor"] = createActor()
+    setActorPosition proj["actor"], xpos, ypos
+
+    if type = "default" then
+        snd = "projectile1.ogg"
+        proj["speed"] = 20
+        proj["damage"] = 2
+        addActorAnimation proj["actor"], "stopped", "projectile1.png", 3, 1, 0.4, false
+        setActorAnimation proj["actor"], "stopped"
+        setActorAnchor proj["actor"], actorWidth(proj["actor"])/2, actorHeight(proj["actor"])/2
+    elseif type = "default2" then
+        snd = "projectile1.ogg"
+        proj["speed"] = 20
+        proj["damage"] = 5
+        addActorAnimation proj["actor"], "stopped", "projectile2.png", 3, 1, 0.4, false
+        setActorAnimation proj["actor"], "stopped"
+        setActorAnchor proj["actor"], actorWidth(proj["actor"])/2, actorHeight(proj["actor"])/2
+    elseif type = "default3" then
+        snd = "projectile2.ogg"
+        proj["speed"] = 20
+        proj["damage"] = 10
+        addActorAnimation proj["actor"], "stopped", "projectile4.png", 3, 1, 0.4, false
+        setActorAnimation proj["actor"], "stopped"
+        setActorAnchor proj["actor"], actorWidth(proj["actor"])/2, actorHeight(proj["actor"])/2
+    elseif type = "ship1" then
+        snd = "projectile1.ogg"
+        proj["speed"] = 20
+        proj["damage"] = 5
+        addActorAnimation proj["actor"], "stopped", "projectile3.png", 1, 2, 0.4, true
+        setActorAnimation proj["actor"], "stopped"
+        setActorAnchor proj["actor"], actorWidth(proj["actor"])/2, actorHeight(proj["actor"])/2
+    else
+        fatalError "Unknown projectile: " + type
+    endif
+
+    playSample snd
+
+    return proj
+endfun
+
+fun destroyProjectile(projectile)
+    destroyActor projectile["actor"]
+    destroyTable projectile
+    return 0
+endfun
+
+fun updateProjectile(projectile)
+    ' move & animate
+    actor = projectile["actor"]
+    dx = projectile["speed"] * projectile["dirx"]
+    dy = projectile["speed"] * projectile["diry"]
+    moveActor actor, dx, dy
+    animateActor actor
+
+    ' collided to an enemy?
+    owner = projectile["owner"]
+    if owner = g_player then
+        ' enemy = enemy of the player
+        for i in g_enemies
+            e = g_enemies[i]
+            if actorCollision(actor, e["actor"]) then
+                explode actorX(actor), actorY(actor)
+                e["hp"] -= projectile["damage"]
+                projectile["state"] = "dead"
+            endif
+        next
+    else
+        ' enemy = player
+        if actorCollision(actor, playerActor(g_player)) then
+            if damagePlayer(g_player, projectile["damage"]) then
+                explode actorX(actor), actorY(actor)
+                projectile["state"] = "dead"
+            endif
+        endif
+    endif
+
+    ' left the screen?
+    if actorX(actor) > screenWidth() + 100 then projectile["state"] = "dead"
+    if actorX(actor) < -100 then projectile["state"] = "dead"
+endfun
+
+fun renderProjectile(projectile)
+    ang = atan2( projectile["diry"], projectile["dirx"] ) ' the correct angle
+    drawActorEx projectile["actor"], 1, 1, ang ' draw it!
+endfun
+
+
+
+
+
+
+
+
+
+
+
+' ------------- // ENEMIES MANAGEMENT // ----------------
+
+fun numberOfEnemies()
+    return tableSize(g_enemies)
+endfun
+
+fun spawnEnemy(type, xpos, ypos)
+    return spawnEnemyEx(type, xpos, ypos, 0)
+endfun
+
+fun spawnEnemyEx(type, xpos, ypos, options)
+    c = g_enemyCounter
+    g_enemyCounter += 1
+    g_enemies[c] = createEnemy(type, xpos, ypos, options)
+    return g_enemies[c]
+endfun
+
+fun updateEnemies()
+    updateEnemySpawner
+    for i in g_enemies
+        p = g_enemies[i]
+        updateEnemy p
+        if p["state"] = "dead" then
+            destroyEnemy p
+            removeTableEntry g_enemies, i
+        endif
+    next
+endfun
+
+fun renderEnemies()
+    for i in g_enemies
+        renderEnemy g_enemies[i]
+    next
+endfun
+
+' this will spawn enemies the way we want
+g_ess = 0 ' enemy spawner step
+g_est = createTimer(1) ' enemy spawner timer
+fun updateEnemySpawner()
+
+    if g_ess >= 0 and g_ess < 1 then
+
+        ' STEP 1: get ready!
+        if g_ess = 0 then
+            setTimerInterval g_est, 4000
+            displayBlinkingText "GET READY!"
+            g_ess += 0.1
+        elseif timerHasExpired(g_est) then
+            g_ess = 1 ' <--- first step!
+            setTimerInterval g_est, 500
+        endif
+
+    elseif g_ess >= 1 and g_ess < 2 then
+
+        ' STEP 2: spawn basic enemies
+        if timerHasExpired(g_est) then
+            spawnEnemyEx "basic", 680, 40 + (g_ess - 1) * 400, 0.015
+            g_ess += 0.1
+            resetTimer g_est
+            if g_ess >= 2 then setTimerInterval g_est, 500
+        endif
+
+    elseif g_ess >= 2 and g_ess < 3 then
+
+        ' STEP 3: wait
+        if timerHasExpired(g_est) and numberOfEnemies() = 0 then
+            g_ess = 3
+            setTimerInterval g_est, 500
+        endif
+
+    elseif g_ess >= 3 and g_ess < 4 then
+
+        ' STEP 4: spawn faster basic enemies
+        if timerHasExpired(g_est) then
+            spawnEnemyEx "basic", 680, 400 * (4 - g_ess), 0.03
+            g_ess += 0.1
+            resetTimer g_est
+            if g_ess >= 4 then
+                setTimerInterval g_est, 5000
+                g_ess = 4
+            endif
+        endif
+
+    elseif g_ess >= 4 and g_ess < 5 then
+
+        ' STEP 5: spikey things
+        if ((g_ess > 4) or (g_ess = 4 and numberOfEnemies() = 0)) and timerHasExpired(g_est) then
+            for i=0 to floor(30 * (g_ess - 3.9))
+                spawnEnemy "bold", 680+random(0,50), random(0, screenHeight())
+            next
+            resetTimer g_est
+            g_ess += 0.34
+
+            if g_ess >= 5 then
+                g_ess = 5
+                setTimerInterval g_est, 1500
+            endif
+        endif
+
+    elseif g_ess >= 5 and g_ess < 6 then
+
+        ' STEP 6: robots
+        if ((g_ess = 5 and numberOfEnemies() = 0) or (g_ess > 5)) and timerHasExpired(g_est) then
+            spawnEnemyEx "jug", 600 - (g_ess - 5.5)^4 * 200, 480, 40 + (g_ess - 5) * 400
+            g_ess += 0.15
+            resetTimer g_est
+        endif
+
+    elseif g_ess >= 6 and g_ess < 7 then
+
+        ' STEP 7: wait a bit
+        if numberOfEnemies() = 0 then
+            setTimerInterval g_est, 5000
+            g_ess = 7
+        endif
+
+    elseif g_ess >= 7 and g_ess < 8 then
+
+        ' STEP 8: watch out!
+        if g_ess = 7 then
+            if timerHasExpired(g_est) then
+                displayBlinkingText "WATCH OUT!"
+                setTimerInterval g_est, 2000
+                g_ess = 7.5
+            endif
+        else
+            if timerHasExpired(g_est) then
+                playSample "scream.ogg"
+                setTimerInterval g_est, 1500
+                g_ess = 8
+            endif
+        endif
+
+    elseif g_ess >= 8 and g_ess < 9 then
+
+        ' STEP 9: make the green monsters appear!
+        if timerHasExpired(g_est) then
+            if g_ess = 8 or g_ess = 8.5 then
+                x = 480 - (g_ess - 8) * 150
+                g_dino = spawnEnemy("dino", x, 520)
+                for i=0 to 10
+                    explode 420+16*i, 450
+                next
+                for i=0 to 12
+                    spawnEnemyEx "asteroid", x, 480, (1+i) * 12
+                next
+                setTimerInterval g_est, 10000
+                g_ess += 0.25
+            elseif g_ess = 8.25 then
+                playSample "scream.ogg"
+                setTimerInterval g_est, 1500
+                g_ess += 0.25
+            else
+                g_ess = 9
+                setTimerInterval g_est, 1000
+            endif
+        endif
+    elseif g_ess >= 9 and g_ess < 10 then
+
+        ' STEP 10: kill the dinos
+        isDinoAlive? = isValidTable(g_dino)
+        if timerHasExpired(g_est) and isDinoAlive? then
+            resetTimer(g_est)
+            spawnEnemy "bold", 680+random(0,50), random(0, screenHeight())
+        elseif not(isDinoAlive?) and numberOfEnemies() = 0 then
+            g_ess = 10
+            setTimerInterval g_est, 2000
+        endif
+
+    elseif g_ess >= 10 and g_ess < 11 then
+
+        ' STEP 11: wait...
+        if timerHasExpired(g_est) then
+            g_ess = 11
+            setTimerInterval g_est, 1000
+        endif
+
+    elseif g_ess >= 11 and g_ess < 12 then
+
+        ' STEP 12: a LOT of stronger robots!
+        if timerHasExpired(g_est) then
+            spawnEnemy "jug2", 680, random(0, screenHeight())
+            g_ess += 0.1
+            resetTimer g_est
+            if g_ess >= 12 then setTimerInterval g_est, 7000
+        endif
+
+    elseif g_ess >= 12 and g_ess < 13 then
+
+        ' STEP 13: wait...
+        if timerHasExpired(g_est) then
+            if numberOfEnemies() = 0 then
+                g_ess = 13
+                playSample "danger.ogg"
+                displayBlinkingText "DANGER!"
+                setTimerInterval g_est, 5000
+            else
+                resetTimer g_est
+            endif
+        endif
+
+    elseif g_ess >= 13 and g_ess < 14 then
+
+        ' STEP 14: spawn the boss
+        if timerHasExpired(g_est) then
+            g_brain = spawnEnemy("brain", 770, 240)
+            setTimerInterval g_est, 1000
+            g_ess = 14
+        endif
+
+    elseif g_ess >= 14 and g_ess < 15 then
+
+        ' STEP 15: defeat the boss
+        if not isValidTable(g_brain) then
+            setTimerInterval g_est, 5000
+            g_ess = 15
+            for k in g_enemies
+                enemy = g_enemies[k]
+                if enemy["type"] = "asteroid" then
+                    explode actorX(enemy["actor"]), actorY(enemy["actor"])
+                    enemy["hp"] = 0
+                endif
+            next
+        elseif timerHasExpired(g_est) then
+            spawnEnemyEx "asteroid", 680, random(0, screenHeight()), random(135, 225)
+            resetTimer g_est
+        endif
+
+    elseif g_ess >= 15 and g_ess < 16 then
+
+        ' STEP 16: victory!!!
+        if timerHasExpired(g_est) then
+            g_ess = 16
+        endif
+
+    elseif g_ess >= 16 and g_ess < 17 then
+
+        ' STEP 17: end
+        setTimerInterval g_est, 3000
+        playerEnableVictoryMode(g_player)
+        g_ess = 17
+
+    elseif g_ess >= 17 and g_ess < 18 then
+
+        ' STEP 18: level cleared
+        if timerHasExpired(g_est) then
+            spawnSpaceObjectEx "levelcleared", 0, 0, g_music
+            g_ess = 18
+        endif
+
+    elseif g_ess >= 18 then
+
+        ' done!
+
+    endif
+        
+endfun
+
+
+
+' ------------------------ // ENEMY ENTITY // ----------------------
+
+fun createEnemy(type, xpos, ypos, options)
+    enemy = createTable()
+    enemy["type"] = type
+    enemy["state"] = "alive"
+    enemy["actor"] = createActor()
+    enemy["collisionDamage"] = 10
+    enemy["dieOnCollision"] = true
+    enemy["hflip"] = false
+    enemy["bulletTimer"] = createTimer(500)
+    enemy["spawnXPos"] = xpos
+    enemy["spawnYPos"] = ypos
+    setActorPosition enemy["actor"], xpos, ypos
+
+    if type = "basic" then
+        ' creating a basic enemy
+        setTimerInterval enemy["bulletTimer"], 500 + random(0,1500)
+        enemy["hp"] = 1
+        enemy["collisionDamage"] = 10
+        enemy["speedMultiplier"] = max(0.015, options)
+        addActorAnimation enemy["actor"], "stopped", "basic_enemy.png", 1, 5, 0.4, true
+        setActorAnimation enemy["actor"], "stopped"
+        setActorAnchor enemy["actor"], actorWidth(enemy["actor"])/2, actorHeight(enemy["actor"])/2
+    elseif type = "bold" then
+        ' creating that bold, spikey, floating thing
+        enemy["hp"] = 5
+        enemy["collisionDamage"] = 10
+        enemy["speed"] = 2+random(0,3)
+        enemy["dirx"] = (-10-random(0,10))
+        enemy["diry"] = -5+random(0,10)
+        norm = sqrt(enemy["dirx"]^2 + enemy["diry"]^2)
+        enemy["dirx"] /= norm
+        enemy["diry"] /= norm
+        addActorAnimationEx enemy["actor"], "stopped", "bold.png", 3, 2, 0, 4, 0.1, true
+        setActorAnimation enemy["actor"], "stopped"
+        setActorAnchor enemy["actor"], actorWidth(enemy["actor"])/2, actorHeight(enemy["actor"])/2
+    elseif type = "jug" then
+        ' robots
+        setTimerInterval enemy["bulletTimer"], 250 + random(0,500)
+        enemy["hp"] = 25
+        enemy["collisionDamage"] = 20
+        enemy["hflip"] = true
+        enemy["dest_y"] = options
+        addActorAnimationEx enemy["actor"], "appearing", "jug.png", 6, 4, 21, 1, 1, true
+        addActorAnimationEx enemy["actor"], "shooting", "jug.png", 6, 4, 5, 3, 0.1, false
+        setActorAnimation enemy["actor"], "appearing"
+        setActorAnchor enemy["actor"], actorWidth(enemy["actor"])/2, actorHeight(enemy["actor"])/2
+    elseif type = "jug2" then
+        ' stronger robots
+        setTimerInterval enemy["bulletTimer"], 250 + random(0,500)
+        enemy["hp"] = 50
+        enemy["collisionDamage"] = 20
+        enemy["hflip"] = true
+        g_jug2Id += 1
+        image = "jug" + toString(2 + g_jug2Id mod 2) + ".png"
+        addActorAnimationEx enemy["actor"], "idle", image, 6, 4, 20, 2, 0.1, true
+        addActorAnimationEx enemy["actor"], "shooting", image, 6, 4, 5, 3, 0.1, false
+        setActorAnimation enemy["actor"], "idle"
+        setActorAnchor enemy["actor"], actorWidth(enemy["actor"])/2, actorHeight(enemy["actor"])/2
+    elseif type = "asteroid" then
+        ' asteroid
+        enemy["hp"] = 30
+        enemy["collisionDamage"] = 30
+        enemy["angle"] = options
+        enemy["speed"] = 1+random(0,2)
+        if random(0, 1) = 0 then
+            addActorAnimationEx enemy["actor"], "idle", "asteroids.png", 8, 2, 0, 8, 0.3, true
+        else
+            addActorAnimationEx enemy["actor"], "idle", "asteroids.png", 8, 2, 8, 8, 0.3, true
+        endif
+        setActorAnimation enemy["actor"], "idle"
+        setActorAnchor enemy["actor"], actorWidth(enemy["actor"])/2, actorHeight(enemy["actor"])/2        
+    elseif type = "dino" then
+        ' dino
+        setTimerInterval enemy["bulletTimer"], 2000
+        enemy["hp"] = 200
+        enemy["collisionDamage"] = 50
+        enemy["dieOnCollision"] = false
+        addActorAnimationEx enemy["actor"], "idle", "dino.png", 4, 1, 0, 2, 0.05, true
+        addActorAnimationEx enemy["actor"], "bite", "dino.png", 4, 1, 2, 1, 0.25, true
+        setActorAnimation enemy["actor"], "idle"
+        setActorAnchor enemy["actor"], 84, 46
+        for i=1 to 10
+            spawnEnemyEx "dinoBody", xpos, ypos, enemy
+        next
+    elseif type = "dinoBody" then
+        ' the body of the dino
+        enemy["hp"] = 9999999
+        enemy["collisionDamage"] = 10
+        enemy["dieOnCollision"] = false
+        enemy["parent"] = options ' the head of the dino
+        enemy["id"] = g_dinoBodyId mod 10 ' my unique identification number
+        g_dinoBodyId += 1
+        addActorAnimationEx enemy["actor"], "idle", "dino.png", 4, 1, 3, 1, 1, true
+        setActorAnimation enemy["actor"], "idle"
+        setActorAnchor enemy["actor"], actorWidth(enemy["actor"])/2, actorHeight(enemy["actor"])/2        
+    elseif type = "brain" then
+        ' boss
+        g_music = playMusicEx("boss.ogg", -1)
+        setTimerInterval enemy["bulletTimer"], 3000
+        enemy["hp"] = 700
+        enemy["collisionDamage"] = 30
+        enemy["dieOnCollision"] = false
+        addActorAnimationEx enemy["actor"], "idle", "brain.png", 2, 1, 0, 1, 0.1, true
+        addActorAnimationEx enemy["actor"], "charging", "brain.png", 2, 1, 0, 2, 0.2, true
+        setActorAnimation enemy["actor"], "idle"
+        setActorAnchor enemy["actor"], actorWidth(enemy["actor"])/2, actorHeight(enemy["actor"])/2
+    elseif type = "defeatedBrain" then
+        ' defeated boss
+        setTimerInterval enemy["bulletTimer"], 125
+        enemy["hp"] = 99999
+        enemy["collisionDamage"] = 30
+        enemy["dieOnCollision"] = false
+        addActorAnimationEx enemy["actor"], "idle", "brain.png", 2, 1, 0, 1, 0.1, true
+        setActorAnimation enemy["actor"], "idle"
+        setActorAnchor enemy["actor"], actorWidth(enemy["actor"])/2, actorHeight(enemy["actor"])/2
+    endif
+
+    return enemy
+endfun
+
+fun destroyEnemy(enemy)
+    destroyTimer enemy["bulletTimer"]
+    destroyActor enemy["actor"]
+    destroyTable enemy
+    return 0
+endfun
+
+fun updateEnemy(enemy)
+    ' stuff
+    type = enemy["type"]
+    actor = enemy["actor"]
+    x = actorX(actor)
+    y = actorY(actor)
+
+    ' animate the actor
+    animateActor actor
+
+    ' each enemy type has a behavior
+    if type = "basic" then
+
+        ' >> BASIC ENEMY <<
+        lim = 320 + 0.003 * (y - 240)^2
+        if x > 30 + lim then x -= enemy["speedMultiplier"] * (x - lim)
+        if timerHasExpired(enemy["bulletTimer"]) then
+            shoot "default", enemy, x-10, y, -1, 0
+            resetTimer enemy["bulletTimer"]
+        endif
+
+    elseif type = "bold" then
+
+        ' >> BOLD, SPIKEY ENEMY <<
+        x += enemy["dirx"] * enemy["speed"]
+        y += enemy["diry"] * enemy["speed"]
+
+    elseif type = "jug" then
+
+        ' >> ROBOT <<
+        if y > enemy["dest_y"] then y -= (y - enemy["dest_y"]) * 0.02
+        if timerHasExpired(enemy["bulletTimer"]) then
+            setActorAnimation actor, "appearing"
+            setActorAnimation actor, "shooting"
+            shoot "default2", enemy, x-10, y-2, -1, 0
+            shoot "default2", enemy, x-10, y-2, -2, -1
+            shoot "default2", enemy, x-10, y-2, -2, 1
+            resetTimer enemy["bulletTimer"]
+        endif
+
+    elseif type = "asteroid" then
+
+        ' >> ASTEROID <<
+        x += cos(enemy["angle"]) * enemy["speed"]
+        y += -sin(enemy["angle"]) * enemy["speed"]
+
+    elseif type = "dino" then
+
+        ' >> DINO <<
+        if enemy["state"] = "alive" then
+
+            setActorAnimation actor, "bite"
+            dest_x = enemy["spawnXPos"]
+            dest_y = 50
+            speed = 4
+            if timerHasExpired(enemy["bulletTimer"]) then
+                setTimerInterval enemy["bulletTimer"], 5000
+                enemy["state"] = "waiting"
+            endif
+
+        elseif enemy["state"] = "waiting" then
+
+            setActorAnimation actor, "idle"
+            dest_x = enemy["spawnXPos"]
+            dest_y = actorY(playerActor(g_player)) + 50 * cos(0.180 * milliseconds())
+            speed = 2
+            if timerHasExpired(enemy["bulletTimer"]) then
+                enemy["state"] = "hunting"
+                setTimerInterval enemy["bulletTimer"], 1000
+                playSample "wolfman.ogg"
+            endif
+
+        elseif enemy["state"] = "hunting" then
+
+            setActorAnimation actor, "bite"
+            dest_x = actorX(playerActor(g_player))
+            dest_y = actorY(playerActor(g_player))
+            speed = 6
+            if timerHasExpired(enemy["bulletTimer"]) then
+                setTimerInterval enemy["bulletTimer"], 5000
+                enemy["state"] = "waiting"
+            endif
+
+        endif
+
+        dx = dest_x - x
+        dy = dest_y - y
+        norm = sqrt(dx^2 + dy^2)
+        if norm > 0 then
+            dx /= norm
+            dy /= norm
+            x += dx * speed
+            y += dy * speed
+        endif
+            
+    elseif type = "dinoBody" then
+    
+        ' >> DINO BODY <<
+        if enemy["state"] = "alive" then
+            dino = enemy["parent"]
+            if isValidTable(dino) then ' the dino hasn't been killed yet
+                sx = dino["spawnXPos"] + 180 + 20 * cos(0.180 * milliseconds())
+                sy = dino["spawnYPos"] + 20 * cos(0.180 * milliseconds())
+                dx = actorX(dino["actor"]) + 65
+                dy = actorY(dino["actor"]) - 10
+                alpha = enemy["id"] / 10
+                x = alpha * sx + (1 - alpha) * dx
+                y = alpha * sy + (1 - alpha) * dy
+            else
+                enemy["state"] = "dying"
+            endif
+        elseif enemy["state"] = "dying" then
+            y += y * 0.03
+        endif
+
+    elseif type = "jug2" then
+
+        ' >> STRONGER ROBOT <<
+        if enemy["state"] = "alive" then
+            enemy["state"] = "choose_dest"
+        elseif enemy["state"] = "choose_dest" then
+            setActorAnimation actor, "idle"
+            dx = enemy["dest_x"]
+            dy = enemy["dest_y"]
+            while (enemy["dest_x"] - dx)^2 + (enemy["dest_y"] - dy)^2 < 100^2
+                enemy["dest_x"] = random(actorX(playerActor(g_player)) + 150, screenWidth() - 10)
+                enemy["dest_y"] = random(50, screenHeight() - 50)
+            wend
+            enemy["state"] = "follow_dest"
+            enemy["bullets"] = 5
+            setTimerInterval enemy["bulletTimer"], random(1500, 3000)
+        elseif enemy["state"] = "follow_dest" then
+            dx = enemy["dest_x"] - x
+            dy = enemy["dest_y"] - y
+            norm = sqrt(dx^2 + dy^2)
+            dx /= norm
+            dy /= norm
+            speed = 5
+
+            if norm > 5 then
+                x += speed*dx
+                y += speed*dy
+            endif
+
+            if timerHasExpired(enemy["bulletTimer"]) then
+                setTimerInterval enemy["bulletTimer"], 200
+                enemy["state"] = "shooting"
+            endif
+        elseif enemy["state"] = "shooting" then
+            if timerHasExpired(enemy["bulletTimer"]) then
+                setActorAnimation actor, "idle"
+                setActorAnimation actor, "shooting"
+                shoot "default3", enemy, x-10, y-2, actorX(playerActor(g_player)) - x, actorY(playerActor(g_player)) - y
+                resetTimer enemy["bulletTimer"]
+
+                enemy["bullets"] -= 1
+                if enemy["bullets"] <= 0 then enemy["state"] = "choose_dest"
+            endif
+        endif
+
+        ' look to the player
+        enemy["hflip"] = (x > actorX(playerActor(g_player)))
+
+    elseif type = "brain" then
+
+        ' >> BRAIN <<
+        if x >= screenWidth() * 0.8 then x -= 2.25
+        if y < actorY(playerActor(g_player)) - 10 then y += 1
+        if y > actorY(playerActor(g_player)) + 10 then y -= 1
+
+        if enemy["state"] = "alive" then
+            setHudBoss g_hud, enemy
+            enemy["state"] = "waiting"
+        elseif enemy["state"] = "waiting" then
+            setActorAnimation actor, "idle"
+            if timerHasExpired(enemy["bulletTimer"]) then
+                setTimerInterval enemy["bulletTimer"], 2000
+                enemy["state"] = "charging"
+                playSample "charge.ogg"
+            endif
+        elseif enemy["state"] = "charging" then
+            setActorAnimation actor, "charging"
+            if timerHasExpired(enemy["bulletTimer"]) then
+                spawnSpaceObjectEx "brainLaser", actorX(actor), actorY(actor), enemy
+                playSample "tesla_tower.ogg"
+                setTimerInterval enemy["bulletTimer"], 5000 - (700 - enemy["hp"])*9
+                enemy["state"] = "waiting"
+            endif
+        endif
+
+        if enemy["hp"] <= 100 then
+            enemy["hp"] = 0
+            spawnEnemy "defeatedBrain", x, y
+        endif
+
+    elseif type = "defeatedBrain" then
+
+        y += 1
+        if timerHasExpired(enemy["bulletTimer"]) then
+            explode x - actorXAnchor(actor) + random(0, actorWidth(actor)), y - actorYAnchor(actor) + random(0, actorHeight(actor))
+            resetTimer enemy["bulletTimer"]
+        endif
+
+    endif
+
+    ' move the actor
+    setActorPosition actor, x, y
+
+    ' collided to the player?
+    if actorCollision(actor, playerActor(g_player)) then
+        if damagePlayer(g_player, enemy["collisionDamage"]) then
+            explode actorX(playerActor(g_player)), actorY(playerActor(g_player))
+            if enemy["dieOnCollision"] then enemy["state"] = "dead"
+        endif
+    endif
+
+    ' left the screen or took too much damage?
+    if (enemy["hp"] <= 0 or x > 850 or x < -100 or y > 580 or y < -100) then enemy["state"] = "dead"
+endfun
+
+fun renderEnemy(enemy)
+    if enemy["hflip"] then
+        drawActorEx enemy["actor"], -1, 1, 0
+    else
+        drawActor enemy["actor"]
+    endif
+endfun
+
+
+
+
+
+
+
+
+
+
+' ---------- // SPACE OBJECTS MANAGEMENT // --------------
+fun spawnSpaceObject(type, x, y)
+    return spawnSpaceObjectEx(type, x, y, 0)
+endfun
+
+fun spawnSpaceObjectEx(type, x, y, options)
+    c = g_soId
+    g_soId += 1
+    g_spaceObjects[c] = createSpaceObjectEx(type, x, y, options)
+    return g_spaceObjects[c]
+endfun
+
+fun updateSpaceObjects()
+    for i in g_spaceObjects
+        p = g_spaceObjects[i]
+        updateSpaceObject p
+        if p["state"] = "dead" then
+            destroySpaceObject p
+            removeTableEntry g_spaceObjects, i
+        endif
+    next
+endfun
+
+fun renderSpaceObjects()
+    for i in g_spaceObjects
+        renderSpaceObject g_spaceObjects[i]
+    next
+endfun
+
+' creates an explosion at the given position
+fun explode(x, y)
+    return spawnSpaceObject("explosion", x, y)
+endfun
+
+' a super flashbang!
+fun flashbang()
+    return spawnSpaceObject("flashbang", 0, 0)
+endfun
+
+' display a blinking text
+fun displayBlinkingText(text)
+    return spawnSpaceObjectEx("text", 0, 0, text)
+endfun
+
+
+
+' ------------- // SPACE OBJECTS // ---------------
+
+fun createSpaceObject(type, xpos, ypos)
+    return createSpaceObjectEx(type, xpos, ypos, 0)
+endfun
+
+fun createSpaceObjectEx(type, xpos, ypos, options)
+    so = createTable()
+    so["type"] = type
+    so["timer"] = createTimer(1000)
+    so["actor"] = createActor()
+    so["state"] = "alive"
+    so["spawnXPos"] = xpos
+    so["spawnYPos"] = ypos
+    so["visible"] = true
+
+    if type = "explosion" then
+        ' an explosion
+        playSample "explosion1.ogg"
+        act = so["actor"]
+        setActorPosition act, xpos, ypos
+        addActorAnimation act, "idle", "explosion.png", 4, 4, 0.3, false
+        setActorAnchor act, 16, 16
+        setActorAnimation act, "idle"
+    elseif type = "fire" then
+        ' a small fire
+        act = so["actor"]
+        setActorPosition act, xpos, ypos
+        addActorAnimation act, "idle", "fire.png", 3, 1, 0.3, true
+        setActorAnchor act, 30, 6
+        setActorAnimation act, "idle"
+    elseif type = "bomb" then
+        ' super bomb
+        setTimerInterval so["timer"], 500
+        act = so["actor"]
+        setActorPosition act, xpos, ypos
+        addActorAnimation act, "idle", "bomb.png", 1, 1, 0.3, true
+        setActorAnchor act, 16, 6
+        setActorAnimation act, "idle"
+        playSample "gravity_bomb.ogg" ' cool stuff!!!
+    elseif type = "flashbang" then
+        ' flashbang
+        setTimerInterval so["timer"], 250
+        playSample "volcano_eruption.ogg"
+        so["alpha"] = 1.0
+    elseif type = "brainLaser" then
+        ' brain laser
+        act = so["actor"]
+        setActorPosition act, xpos, ypos
+        so["alpha"] = 1.0
+        so["height"] = 50
+        so["parent"] = options
+    elseif type = "text" then
+        ' text
+        setTimerInterval so["timer"], 200
+        so["text"] = options
+        so["loops"] = 15
+    elseif type = "levelcleared" then
+        ' level clared
+        so["alpha"] = 0.0
+        so["music"] = options
+        so["score"] = max(120*60*1000 - milliseconds(), 100) ' 5 minutes max.
+        hideHud g_hud
+    endif
+
+    return so
+endfun
+
+fun destroySpaceObject(so)
+    destroyTimer so["timer"]
+    destroyActor so["actor"]
+    destroyTable so
+    return 0
+endfun
+
+fun updateSpaceObject(so)
+    type = so["type"]
+    act = so["actor"]
+    tmr = so["timer"]
+    x = actorX(act)
+    y = actorY(act)
+
+    if type = "explosion" then
+        ' explosion
+        animateActor act
+        if actorAnimationFinished(act) then so["state"] = "dead"
+    elseif type = "fire" then
+        ' small fire
+        animateActor act
+        px = actorX(playerActor(g_player))
+        py = actorY(playerActor(g_player))
+        setActorPosition act, px, py-1
+        so["visible"] = g_player["visible"] and not keyDown(g_keyLeft)
+    elseif type = "bomb" then
+        ' super bomb
+        animateActor act
+        moveActor act, 3, 0
+        if x < screenWidth() * 0.75 then
+            resetTimer tmr
+        elseif timerHasExpired(tmr) then
+            flashbang
+            so["state"] = "dead"
+        endif
+    elseif type = "flashbang" then
+        ' flashbang
+        if so["alpha"] = 1.0 then
+            for key in g_enemies
+                enemy = g_enemies[key]
+                enemy["hp"] -= 50
+            next
+        endif
+
+        so["alpha"] = max(0, so["alpha"] - 0.005)
+        if so["alpha"] <= 0.0 then so["state"] = "dead"
+    elseif type = "brainLaser" then
+        ' brain laser
+        if so["alpha"] = 1.0 then
+            ' did the laser hit an enemy (different than the brain)?
+            for key in g_enemies
+                enemy = g_enemies[key]
+                eact = enemy["actor"]
+                if enemy <> so["parent"] then
+                    if actorX(eact) <= x and actorY(eact) + actorYAnchor(eact) >= y - so["height"]/2 and actorY(eact) - actorYAnchor(eact) < y + so["height"]/2 then
+                        explode actorX(eact), actorY(eact)
+                        enemy["hp"] -= 100
+                    endif
+                endif
+            next
+
+            ' did the laser hit the player?
+            player = playerActor(g_player)
+            if actorY(player) + actorYAnchor(player) >= y - so["height"]/2 and actorY(player) - actorYAnchor(player) < y + so["height"]/2 then damagePlayer g_player, 100
+        endif
+
+        so["height"] = max(1, so["height"] - 0.5)
+        so["alpha"] = max(0, so["alpha"] - 0.05)
+        if so["alpha"] <= 0.0 then so["state"] = "dead"
+    elseif type = "text" then
+        ' blinking text
+        if timerHasExpired(tmr) then
+            resetTimer tmr
+            so["visible"] = not so["visible"]
+            so["loops"] -= 1
+            if so["loops"] <= 0 then so["state"] = "dead"
+        endif
+    elseif type = "levelcleared" then
+        ' level cleared
+        ' fadeout
+        if so["alpha"] >= 1.0 then
+            so["alpha"] = 1.0
+        else
+            so["alpha"] += 0.01
+            so["ms"] = milliseconds()
+        endif
+
+        ' fade out music
+        setVoiceVolume so["music"], max(0, voiceVolume(so["music"]) - 0.01)
+    endif
+
+    ' left the screen?
+    if (x > 740 or x < -100 or y > 580 or y < -100) then so["state"] = "dead"
+endfun
+
+fun renderSpaceObject(so)
+    if so["visible"] then
+        if so["type"] = "flashbang" then
+            ' flashbang
+            a = getAlpha()
+            setAlpha so["alpha"]
+            setColor 255, 255, 255
+            rectfill 0, 0, screenWidth(), screenHeight()
+            setAlpha a
+        elseif so["type"] = "brainLaser" then
+            ' brain laser
+            a = getAlpha()
+            setAlpha so["alpha"]
+            setColor 255, 0, 0
+            setBlendingMode "additive"
+            rectfill 0, actorY(so["actor"]) - so["height"]/2, actorX(so["actor"]), so["height"]
+            setBlendingMode "normal"
+            setAlpha a
+        elseif so["type"] = "text" then
+            ' blinking text
+            txt = so["text"]
+            x = 320-len(txt)*7
+            y = 225
+            setcolor 0, 0, 0
+            textout x+1, y+1, 16, txt
+            setcolor 255, 255, 255
+            textout x, y, 16, txt
+        elseif so["type"] = "levelcleared" then
+            ' level cleared
+            a = getAlpha()
+            setAlpha so["alpha"]
+            setColor 0, 0, 0
+            rectfill 0, 0, screenWidth(), screenHeight()
+            setAlpha a
+
+            if so["alpha"] >= 1.0 then
+                seconds = floor(so["ms"] / 1000) mod 60
+                minutes = floor(so["ms"] / 60000)
+
+                c = max(0, (so["ms"] + 2000 - milliseconds()) * 0.01)
+                setscale 1.0+c, 1.0+c
+
+                setcolor 255, 255, 255
+                line 55, 40, 585, 40
+                textoutEx 180, 70, "serif", 48, "WINNER!"
+                line 55, 170, 585, 170
+                textoutEx 45, 210, "serif", 18, "Time:"
+                textoutEx 45, 250, "serif", 18, "Score:"
+                textoutEx 210, 425, "serif", 18, "Thanks for playing!"
+                setcolor 255, 255, 0
+                textoutEx 205, 210, "serif", 18, minutes + "min " + seconds + "s"
+                textoutEx 205, 250, "serif", 18, so["score"]
+
+                setscale 1, 1
+
+                if c = 0 and not so["playedSample"] then
+                    so["playedSample"] = true
+                    playSample "yeah.ogg"
+                endif
+            endif
+        elseif type = "explosion" then
+            ' explosion
+            setBlendingMode "additive"
+            drawActor so["actor"]
+            setBlendingMode "normal"
+        else
+            ' other object
+            drawActor so["actor"]
+        endif
+    endif
+endfun
+
+
+
+' ---------- // HUD // --------------
+
+fun createHud()
+    hud = createTable()
+    hud["player"] = g_player
+    hud["boss"] = 0
+    hud["visible"] = true
+    hud["fpsTimer"] = createTimer(1000)
+    hud["fps"] = 0
+    hud["fpsAccum"] = 0
+    return hud
+endfun
+
+fun destroyHud(hud)
+    destroyTimer hud["fpsTimer"]
+    return destroyTable(hud)
+endfun
+
+fun updateHud(hud)
+    ' fps counter
+    hud["fpsAccum"] += 1
+    if timerHasExpired(hud["fpsTimer"]) then
+        hud["fps"] = hud["fpsAccum"]
+        hud["fpsAccum"] = 0
+        resetTimer hud["fpsTimer"]
+    endif
+endfun
+
+fun renderHud(hud)
+    if not hud["visible"] then return
+
+    x = 20
+    y = 20
+    w = 250
+    h = 10
+    sw = screenWidth()
+    sh = screenHeight()
+    player = hud["player"]
+    boss = hud["boss"]
+
+    ' player hp
+    setcolor 255, 255, 255
+    rect x-1, y-1, w+1, h+1
+    setcolor 0,0, 255
+    rectfill x, y, w * (player["hp"]/100), h
+
+    ' player bombs
+    for i=1 to player["bombs"]
+        drawImage "bomb.png", x + (i-1)*(imageWidth("bomb.png")+10), y+h+10
+    next
+
+    ' boss hp
+    if isValidTable(boss) then
+        setcolor 0, 0, 0
+        textout -x+sw-49, y+h+11, 12, "BOSS"
+        setcolor 255, 255, 255
+        textout -x+sw-50, y+h+10, 12, "BOSS"
+        rect -x-1+sw-w, y-1, w+1, h+1
+        setcolor 255, 0, 0
+        rectfill -x+sw-w, y, w * ((boss["hp"]-100)/600), h
+    endif
+
+    ' fps counter
+    setcolor 0, 0, 0
+    textout sw-46, sh-19, 10, "fps: " + hud["fps"]
+    setcolor 255, 255, 255
+    textout sw-47, sh-20, 10, "fps: " + hud["fps"]
+endfun
+
+fun setHudBoss(hud, boss)
+    hud["boss"] = boss
+endfun
+
+fun hideHud(hud)
+    hud["visible"] = false
+endfun

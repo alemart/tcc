@@ -1,0 +1,53 @@
+' habilita double buffering a 60 fps
+gameMode
+
+' numero de pontos a testar
+' NOTA: se vc aumentar muito este numero, experimente comentar
+'       a chamada ao procedimento "desenhaPontos".
+numPontos = 10
+
+' posiciona os pontos ao acaso
+xpos = createTable()
+ypos = createTable()
+for i=0 to numPontos-1
+    xpos[i] = random(0, screenWidth())
+    ypos[i] = random(0, screenHeight())
+next
+
+' loop principal da animacao
+mindist = 99999
+for i=0 to numPontos-1
+    for j=0 to numPontos-1
+        if i <> j then
+            ' limpa a tela
+            cls
+            
+            ' algoritmo
+            mindist = min(mindist, dist(xpos[i], ypos[i], xpos[j], ypos[j]))
+
+            ' animacao
+            setColor 255, 255, 255
+            desenhaPontos numPontos, xpos, ypos
+            setColor 0, 255, 0
+            line xpos[i], ypos[i], xpos[j], ypos[j]
+
+            ' mostra a tela
+            flip
+        endif
+    next
+next
+
+' acabou
+msgbox "kbô. Menor distância: " + mindist
+
+' funcao para desenhar os pontos
+fun desenhaPontos(n, x, y)
+    for i=0 to n-1
+        plot x[i], y[i]
+    next
+endfun
+
+' calcula a distancia entre dois pontos
+fun dist(x1, y1, x2, y2)
+    return sqrt((x1-x2)^2 + (y1-y2)^2)
+endfun

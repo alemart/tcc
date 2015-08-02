@@ -1,0 +1,8 @@
+span.chinchilla-comment { color: #7f7; }
+span.chinchilla-keyword { font-weight: bold; color: #ff7; }
+span.chinchilla-string { color: #ffa7a7; }
+span.chinchilla-builtin { font-weight: bold; color: #375173; }
+span.chinchilla-special { font-weight: bold; color: #0aa; }
+span.chinchilla-variable { color: #fff; }
+span.chinchilla-number, span.chinchilla-atom { color: #97d7ff; }
+span.chinchilla-meta {color: #555;}

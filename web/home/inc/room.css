@@ -1,0 +1,178 @@
+#roomdev {
+    padding: 5px;
+    margin-bottom: 15px;
+}
+
+#roomdev_lwrap {
+    color: #000;
+    float: left;
+    width: 83%;
+}
+
+#roomdev_codewrap {
+    height: 700px;
+    width: 98%;
+    margin-bottom: 10px;
+}
+
+#roomdev_codewrap > textarea {
+/*    visibility: hidden;
+    display: none;*/
+    width: 100%;
+    height: 100%;
+    background: #222;
+    color: #fff;
+    border: 0;
+}
+
+.CodeMirror {
+    height: 100%;
+    font-size: 12pt;
+}
+
+#roomdev_rwrap {
+    color: #fff;
+    float: right;
+    width: 17%;
+}
+
+#roomdev_buttonswrap {
+    margin-bottom: 15px;
+}
+
+#roomdev_buttonswrap table {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+}
+
+#roomdev_buttonswrap td, #roomdev_buttonswrap tr {
+    padding: 0;
+    margin: 0;
+}
+
+#roomdev_buttonswrap td:first-child {
+    width: 100%;
+}
+
+#roomdev_buttonswrap button#compile {
+    width: 100%;
+    height: 24px;
+}
+
+#roomdev_buttonswrap button#export {
+    width: 32px;
+    height: 24px;
+}
+
+/* -------------------------------- */
+
+#roomdev_assetswrap {
+    background-color: #375173;
+    box-shadow: 5px 5px 5px #264062;
+    border-radius: 5px;
+    padding: 5px;
+    height: 250px;
+}
+
+#assetPreview {
+    width: 400px;
+    height: 400px;
+    display: none;
+    overflow: auto;
+}
+
+#assetPreview pre {
+    background-color: #222;
+    white-space: pre-wrap;
+    padding: 5px;
+}
+
+#assetPreview p.meta {
+    font-size: small;
+    font-family: monospace;
+}
+
+#assetUpload {
+    width: 300px;
+    height: 250px;
+    display: none;
+    overflow: auto;
+}
+
+#assetUpload div:last-child {
+    display: none;
+}
+
+#assetbrowserwrap {
+    background-color: #375173;
+    overflow: auto;
+    height: 170px;
+}
+
+#roomdev_assetswrap #upload {
+    margin-top: 10px;
+    width: 100%;
+}
+
+/* -------------------------------- */
+
+#roomdev_apiwrap {
+    box-shadow: 5px 5px 5px #264062;
+    border-radius: 5px;
+    min-height: 250px;
+    background-color: #375173;
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+#roomdev_apiwrap pre {
+    /*white-space: nowrap;*/
+}
+
+#roomdev_apiwrap > dl.accordion
+{
+    height: 400px;
+    overflow-x: hidden;
+    overflow-y: scroll;
+}
+
+#roomdev_apiwrap .command_options {
+    display: none;
+}
+
+#roomdev_apiwrap .command_options dt {
+    color: #fff;
+}
+
+#roomdev_apiwrap .command_options > dd dt {
+    font-style: italic;
+}
+
+#roomdev_apiwrap a.expand_command_options {
+    white-space: nowrap;
+    font-family: monospace;
+    color: #9DBCF7;
+}
+
+/* -------------------------------- */
+
+#gameArea {
+    display: none;
+}
+
+#printer {
+    padding: 0;
+    margin-bottom: 10px;
+    height: 16px;
+    font-size: 14px;
+    overflow: auto;
+    font-family: sans-serif;
+}
+
+canvas {
+    background-color: #000;
+    position: absolute;
+    visibility: hidden;
+}

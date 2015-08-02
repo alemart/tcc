@@ -1,0 +1,701 @@
+<!DOCTYPE html> 
+<html lang="en"> 
+ <head> 
+  <meta charset="utf-8"> 
+  <title>gamewizard.cc</title> 
+  <style> 
+  body { background-color: #fff; font-family: sans-serif; font-size: 12pt; color: #000; }
+  a,a:link,a:visited,a:hover { text-decoration: underline; color: #777; }
+  #space { width: 100%; }
+  #inputArea { width: 50%; float: left; }
+  #outputArea { width: 50%; float: right; }
+  #printer { background-color: #ddf; width: 515px; border-left: 5px solid #aac; }
+  canvas { background-color: #000; position: absolute; visibility: hidden; }
+  </style> 
+  <script src="gwruntime.js"></script> 
+  <script>
+$(document).ready(function() {
+try {
+    var vm = new RuntimeEngine(200, 30000, 65536);
+    var g = {
+        "title": "Hello!",
+        "media": {
+            "ufo.png":             "http://domain/blabla/script.php?uid=7&file=ufo.png",
+            "ufo2.png":            "http://domain/blabla/script.php?uid=7&file=ufo2.png",
+            "song.mp3":            "http://domain/blabla/script.php?uid=7&file=song.mp3"
+        },
+        "program": [1,0,0]
+    };
+
+    $("#compile").click(function() {
+        var debug = $("#debug").is(":checked");
+        vm.powerOff();
+        $("#printer").text("Compilando...");
+        $.post("../../cgi-bin/gwasm", { "code": $("#code").val(), "debug": debug ? "true" : "false" }, function(raw) {
+            try {
+                bin = $.parseJSON(raw);
+                if(bin.status == "ok" && !debug) {
+                    // compiler: success!
+                    $("#printer").text("");
+                    g.program = bin.data;
+                    vm.loadGame(g);
+                    vm.powerOn();
+                }
+                else {
+                    // compiler: error
+                    $("#printer").text(bin.data);
+                }
+            }
+            catch(e) {
+                vm.powerOff();
+                alert("FATAL ERROR\n\n" + e.message);
+            }
+        });
+    });
+}
+catch(e) {
+    vm.powerOff();
+    alert("FATAL ERROR\n\n" + e.message);
+}
+});
+  </script>
+
+ </head> 
+ <body> 
+ 
+  <header> 
+   <h2>Demo #3</h2> 
+  </header> 
+  <hr> 
+ 
+  <section> 
+   <p>Isto foi testado no Google Chrome, no Internet Explorer 9 e no Firefox 4. Clique em "Compilar" e aguarde.</p>
+   <div id="space"> 
+    <div id="inputArea"> 
+     <form> 
+      <input id="compile" type="button" value="Compilar"><br>
+      <textarea id="code" rows="30" cols="60">;
+; gnop - primeira aplicacao jogavel do tcc!
+; by Alexandre Martins, 2011
+;
+; Jogue com as setas CIMA e BAIXO
+; 
+; ====================================================
+;
+; Para chamar uma funcao, use call <FUN_NAME>
+; Parametros devem ser empilhados em ordem inversa
+;
+; [ ...         ]                   Esquema da
+; [ var locais  ]  <--- BP          pilha
+; [ BP antigo   ]
+; [ RET address ]
+; [ parametro 1 ]                   Endereços de
+; [ parametro 2 ]                   memoria crescem
+; [ ...         ]                   de cima para
+; [ parametro n ]                   baixo
+; [ ...         ]
+;
+; Caso a funcao retorne algo, retornara no
+; registrador FUN
+;
+; ====================================================
+;
+; Dados na memoria:
+;
+; ------------------------------------------
+; endereco       descricao
+; ------------------------------------------
+; 2048           posicao x da bolinha
+; 2049           posicao y da bolinha
+; 2050           velocidade x da bolinha
+; 2051           velocidade y da bolinha
+;
+; 2052           posicao y da 1a barrinha
+; 2053           velocidade y da 1a barrinha
+;
+; 2054           posicao y da 2a barrinha
+; 2055           velocidade y da 2a barrinha
+;
+; 2056           pontos do jogador 1
+; 2057           pontos do jogador 2
+;
+jmp main
+
+; ------------------------------------------
+; bool key(int keycode)
+; a tecla keycode esta pressionada?
+; obs: 0 <= keycode <= 255
+; ------------------------------------------
+key:
+    push bp
+    mov bp, sp
+    push adr
+    push a
+
+    mov adr, bp
+    add adr, 3
+    load a, adr
+    add a, 304
+    load fun, a ; fun = mem[304+keycode]
+
+    pop a
+    pop adr
+    pop bp
+    ret
+
+; ------------------------------------------
+; int elapsed_time()
+; tempo decorrido - dado em ms
+; ------------------------------------------
+elapsed_time:
+    load fun, 288
+    ret
+
+; ------------------------------------------
+; void enable_double_buffering()
+; ativa double buffering
+; ------------------------------------------
+enable_double_buffering:
+    push 4
+    int 7
+    ret
+
+; ------------------------------------------
+; void flip()
+; swap buffers
+; ------------------------------------------
+flip:
+    push 5
+    int 7
+    ret
+
+; ------------------------------------------
+; bool colisao_1()
+; verifica se bolinha colidiu com barrinha #1
+; ------------------------------------------
+colisao_1:
+    push a
+    push b
+    push c
+    push d
+
+    mov fun, false
+
+    load a, 2048  ; a := ball.x
+    load b, 2049  ; b := ball.y
+    load c, 2052  ; c := bar[0].y
+
+    ; colisao no eixo x?
+    sub a, 5
+    fcmp a, 5
+    jge colisao_1_fim
+
+    ; colisao no eixo y?
+    add b, 5
+    fcmp b, c
+    jl colisao_1_fim
+    sub b, 10
+    add c, 100
+    fcmp b, c
+    jge colisao_1_fim
+
+    ; houve colisao
+    mov fun, true
+
+    colisao_1_fim:
+    pop d
+    pop c
+    pop b
+    pop a
+    ret
+
+; ------------------------------------------
+; bool colisao_2()
+; verifica se bolinha colidiu com barrinha #2
+; ------------------------------------------
+colisao_2:
+    push a
+    push b
+    push c
+    push d
+
+    mov fun, false
+
+    load a, 2048  ; a := ball.x
+    load b, 2049  ; b := ball.y
+    load c, 2054  ; c := bar[1].y
+
+    ; colisao no eixo x?
+    add a, 5
+    fcmp a, 515
+    jl colisao_2_fim
+
+    ; colisao no eixo y?
+    add b, 5
+    fcmp b, c
+    jl colisao_2_fim
+    sub b, 10
+    add c, 100
+    fcmp b, c
+    jge colisao_2_fim
+
+    ; houve colisao
+    mov fun, true
+
+    colisao_2_fim:
+    pop d
+    pop c
+    pop b
+    pop a
+    ret
+
+; ------------------------------------------
+; void textout(string fontName, int fontSize, int x, int y, string text)
+; mostra um texto
+; ------------------------------------------
+textout:
+    push bp
+    mov bp, sp
+    push adr
+    push a
+
+    mov adr, bp
+    add adr, 7
+    load a, adr
+    push a
+    sub adr, 1
+    load a, adr
+    push a
+    sub adr, 1
+    load a, adr
+    push a
+    sub adr, 1
+    load a, adr
+    push a
+    sub adr, 1
+    load a, adr
+    push a
+    push 17
+    int 7
+
+    pop a
+    pop adr
+    pop bp
+    ret
+
+; ------------------------------------------
+; void color(float r, float g, float b)
+; muda a cor da tinta
+; ------------------------------------------
+color:
+    push bp
+    mov bp, sp
+    push adr
+    push a
+
+    mov adr, bp
+    add adr, 5
+    load a, adr
+    push a          ; red
+    sub adr, 1
+    load a, adr
+    push a          ; green
+    sub adr, 1
+    load a, adr
+    push a          ; blue
+    push 10
+    int 7
+
+    pop a
+    pop adr
+    pop bp
+    ret
+
+; ------------------------------------------
+; void draw()
+; desenha os sprites
+; ------------------------------------------
+draw:
+    push a
+    push b
+
+    ; cor marrom
+    push 0.1
+    push 0.2
+    push 0.3
+    call color
+    pop a
+    pop a
+    pop a
+
+    ; titulo
+    push "gnop"
+    push 120
+    push 157
+    push 72
+    push "times"
+    call textout
+    pop c
+    pop c
+    pop c
+    pop c
+    pop c
+
+    ; cor cinza
+    push 0.5
+    push 0.5
+    push 0.5
+    call color
+    pop a
+    pop a
+    pop a
+
+    ; tempo decorrido
+    mov c, "tempo: "
+    call elapsed_time
+    div fun, 1000
+    floor fun
+    cat c, fun
+    cat c, "s"
+
+    push c
+    push 310
+    push 197
+    push 16
+    push "times"
+    call textout
+    pop c
+    pop c
+    pop c
+    pop c
+    pop c
+
+    ; pontuacao do jogador 1
+    mov a, 2056
+    load a, a
+    push a
+    push 10
+    push 50
+    push 22
+    push "sans-serif"
+    call textout
+    pop a
+    pop a
+    pop a
+    pop a
+    pop a
+
+    ; pontuacao do jogador 2
+    mov a, 2057
+    load a, a
+    push a
+    push 10
+    push 440
+    push 22
+    push "sans-serif"
+    call textout
+    pop a
+    pop a
+    pop a
+    pop a
+    pop a
+
+    ; cor branca
+    push 1
+    push 1
+    push 1
+    call color
+    pop a
+    pop a
+    pop a
+
+    ; bola
+    load a, 2048
+    load b, 2049
+    push 10 ; radius
+    push b  ; ypos
+    push a  ; xpos
+    push 14 ; circlefill
+    int 7   ; call video
+
+    ; cor vermelha
+    push 0
+    push 0
+    push 1
+    call color
+    pop a
+    pop a
+    pop a
+
+    ; barra #1
+    load a, 2052
+    push 100 ; height
+    push 10  ; width
+    push a   ; ypos
+    push 0   ; xpos
+    push 12  ; rectfill
+    int 7    ; call video
+
+    ; barra #2
+    load a, 2054
+    push 100 ; height
+    push 10  ; width
+    push a   ; ypos
+    push 510 ; xpos
+    push 12  ; rectfill
+    int 7    ; call video
+
+    pop b
+    pop a
+    ret
+
+; ------------------------------------------
+; void control_1()
+; controle da barrinha 1
+; ------------------------------------------
+control_1:
+    push a
+    push b
+
+    mov a, 0 ; direcao
+
+    control_1_u:
+    push 38 ; keycode(CIMA) = 38
+    call key
+    pop b
+    lcmp fun, true
+    jne control_1_d
+    add a, -1
+
+    control_1_d:
+    push 40 ; keycode(BAIXO) = 40
+    call key
+    pop b
+    lcmp fun, true
+    jne control_1_m
+    add a, 1
+
+    control_1_m:
+    load b, 2053
+    mul a, b
+    load b, 2052
+    add b, a
+    fcmp b, 0
+    jl control_1_min
+    fcmp b, 240
+    jg control_1_max
+    jmp control_1_fim
+
+    control_1_min:
+    mov b, 0
+    jmp control_1_fim
+
+    control_1_max:
+    mov b, 240
+
+    control_1_fim:
+    store b, 2052
+
+    pop b
+    pop a
+    ret
+
+; ------------------------------------------
+; void control_2()
+; controle da barrinha 2
+; ------------------------------------------
+control_2:
+    push a
+    push b
+
+    load a, 2054
+    add a, 50    ; bar[1].y+50
+    load b, 2049 ; ball.y
+    fcmp a, b
+    jl control_2_d
+
+    control_2_u:
+    load a, 2054
+    load b, 2055
+    sub a, b
+    store a, 2054
+    jmp control_2_m
+
+    control_2_d:
+    load a, 2054
+    load b, 2055
+    add a, b
+    store a, 2054
+
+    control_2_m:
+    pop b
+    pop a
+    ret
+
+; ------------------------------------------
+; void restart()
+; reinicia bolinha
+; ------------------------------------------
+restart:
+    mov a, 260
+    mov b, 170
+    mov c, 5
+    mov d, 5
+
+    store a, 2048   ; mem[2048] = a
+    store b, 2049
+    store c, 2050
+    store d, 2051
+
+    ret
+
+; ------------------------------------------
+; void marca_ponto_1()
+; ponto do jogador 1
+; ------------------------------------------
+marca_ponto_1:
+    push a
+    load a, 2056
+    add a, 1
+    store a, 2056
+    call restart
+    pop a
+    ret
+
+; ------------------------------------------
+; void marca_ponto_2()
+; ponto do jogador 2
+; ------------------------------------------
+marca_ponto_2:
+    push a
+    load a, 2057
+    add a, 1
+    store a, 2057
+    call restart
+    pop a
+    ret
+
+; ------------------------------------------
+; void disclamer()
+; mensagenzinha...
+; ------------------------------------------
+disclamer:
+    push "ATENCAO: tire o foco da caixa de texto ao lado,\ncaso contrario podera haver lentidao!"
+    push 0
+    int 5
+    ret
+
+; ------------------------------------------
+; void main()
+; funcao principal
+; ------------------------------------------
+main:
+    call enable_double_buffering
+    call disclamer
+    call restart
+
+    mov a, 10
+    store a, 2053
+    mov a, 3.9
+    store a, 2055
+
+    loop:
+    ; controle das barrinhas
+    call control_1
+    call control_2
+
+    ; carrega posicao da bolinha
+    load a, 2048    ; a = mem[2048]
+    load b, 2049
+    load c, 2050
+    load d, 2051
+
+    ; atualiza posicao da bolinha
+    add a, c
+    add b, d
+
+    fcmp a, -50
+    jl ponto_2
+    fcmp a, 570
+    jg ponto_1
+
+    call colisao_1
+    lcmp fun, true
+    je velx_plus
+    call colisao_2
+    lcmp fun, true
+    je velx_minus
+
+    fcmp b, 20
+    jl vely_plus
+    fcmp b, 320
+    jg vely_minus
+
+    jmp loop_fim
+
+    ponto_1:
+    call marca_ponto_1
+    jmp loop_fim2
+
+    ponto_2:
+    call marca_ponto_2
+    jmp loop_fim2
+
+    velx_plus:
+    mul c, c
+    sqrt c
+    add c, 0.5
+    jmp loop_fim
+
+    velx_minus:
+    mul c, c
+    sqrt c
+    neg c
+    sub c, 0.5
+    jmp loop_fim
+
+    vely_plus:
+    mul d, d
+    sqrt d
+    jmp loop_fim
+
+    vely_minus:
+    mul d, d
+    sqrt d
+    neg d
+    jmp loop_fim
+
+    loop_fim:
+    ; guarda posicao da bolinha
+    store a, 2048
+    store b, 2049
+    store c, 2050
+    store d, 2051
+
+    loop_fim2:
+    ; desenha a tela
+    call draw
+
+    ; double buffering
+    call flip
+
+    ; loop
+    jmp loop</textarea><br>
+      <input id="debug" type="checkbox"> <label for="debug">Apenas pré-processar?</label>
+     </form> 
+    </div> 
+    <div id="outputArea"> 
+     <pre id="printer"></pre>
+     <canvas id="screen0" width="520" height="340">Oh no! Your browser doesn't support canvas!</canvas>
+     <canvas id="screen1" width="520" height="340"></canvas>
+    </div> 
+   </div> 
+   <br clear="all"><hr>
+  </section> 
+ 
+  <footer> 
+   Data: 27/04/2011 - <a href="http://www.linux.ime.usp.br/~alemart">Alexandre Martins</a> - <a href="http://gamewizard.cc">gamewizard.cc</a> 
+  </footer>  
+ 
+ </body> 
+</html> 

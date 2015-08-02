@@ -1,0 +1,777 @@
+;
+; gnop - clone do pong
+; by Alexandre Martins, 2011
+; imagem de fundo feita por Cuzco (opengameart.org)
+; musica de fundo feita por Level27 (soundcloud.com/level27)
+; spell sfx por Bart Kelsey (opengameart.org)
+;
+; Jogue com as setas CIMA e BAIXO
+; 
+; ====================================================
+;
+; Para chamar uma funcao, use call <FUN_NAME>
+; Parametros devem ser empilhados em ordem inversa
+;
+; [ ...         ]                   Esquema da
+; [ var locais  ]  <--- BP          pilha
+; [ BP antigo   ]
+; [ RET address ]
+; [ parametro 1 ]                   Endereços de
+; [ parametro 2 ]                   memoria crescem
+; [ ...         ]                   de cima para
+; [ parametro n ]                   baixo
+; [ ...         ]
+;
+; Caso a funcao retorne algo, retornara no
+; registrador FUN
+;
+; ====================================================
+;
+; Dados na memoria:
+;
+; ------------------------------------------
+; endereco       descricao
+; ------------------------------------------
+; 2048           posicao x da bolinha
+; 2049           posicao y da bolinha
+; 2050           velocidade x da bolinha
+; 2051           velocidade y da bolinha
+;
+; 2052           posicao y da 1a barrinha
+; 2053           velocidade y da 1a barrinha
+;
+; 2054           posicao y da 2a barrinha
+; 2055           velocidade y da 2a barrinha
+;
+; 2056           pontos do jogador 1
+; 2057           pontos do jogador 2
+;
+; 2058           voice id para 'music.ogg'
+; 2059           voice id para 'music.mp3'
+; 2060           voice id para 'score.ogg'
+; 2061           voice id para 'score.mp3'
+; 2062           voice id para 'hit.ogg'
+; 2063           voice id para 'hit.mp3'
+; 2064           voice id para 'hit.ogg'
+; 2065           voice id para 'hit.mp3'
+;
+jmp main
+
+; ------------------------------------------
+; void alloc_voice(string filename, int mempos)
+; aloca uma voz e grava o id da nova voz em mem[mempos]
+; ------------------------------------------
+alloc_voice:
+    push bp
+    mov bp, sp
+    push adr
+    push a
+    push b
+
+    ; le parametros
+    mov adr, bp
+    add adr, 3
+    load a, adr ; a := filename
+    add adr, 1
+    load b, adr ; b := mempos
+
+    ; cria voz
+    push a ; filename
+    push 0 ; create voice
+    int 6 ; call audio
+    pop a ; a := voice id
+
+    ; guarda id da voz na memoria
+    store a, b
+
+    pop b
+    pop a
+    pop adr
+    pop bp
+    ret
+
+; ------------------------------------------
+; void alloc_all_voices()
+; aloca as vozes de acordo com:
+;
+; 2058           voice id para 'music.ogg'
+; 2059           voice id para 'music.mp3'
+; 2060           voice id para 'score.ogg'
+; 2061           voice id para 'score.mp3'
+; 2062           voice id para 'hit.ogg'
+; 2063           voice id para 'hit.mp3'
+; 2064           voice id para 'hit.ogg'
+; 2065           voice id para 'hit.mp3'
+; ------------------------------------------
+alloc_all_voices:
+    push a
+
+    push 2058
+    push "music.ogg"
+    call alloc_voice
+    pop a
+    pop a
+
+    push 2059
+    push "music.mp3"
+    call alloc_voice
+    pop a
+    pop a
+
+    push 2060
+    push "score.ogg"
+    call alloc_voice
+    pop a
+    pop a
+
+    push 2061
+    push "score.mp3"
+    call alloc_voice
+    pop a
+    pop a
+
+    push 2062
+    push "hit.ogg"
+    call alloc_voice
+    pop a
+    pop a
+
+    push 2063
+    push "hit.mp3"
+    call alloc_voice
+    pop a
+    pop a
+
+    push 2064
+    push "hit.ogg"
+    call alloc_voice
+    pop a
+    pop a
+
+    push 2065
+    push "hit.mp3"
+    call alloc_voice
+    pop a
+    pop a
+
+    pop a    
+    ret
+
+; ------------------------------------------
+; void play_sound(int mempos)
+; toca o som cuja voz esta' armazenada em mem[mempos]
+; ------------------------------------------
+play_sound:
+    push bp
+    mov bp, sp
+    push adr
+    push a
+
+    ; parametros
+    mov adr, bp
+    add adr, 3
+    load a, adr ; a := mempos
+    load a, a ; a := mem[mempos] = voice id
+
+    ; toque o som
+    push 1 ; loops
+    push a ; sound
+    push 2 ; play sound
+    int 6 ; call audio
+
+    pop a
+    pop adr
+    pop bp
+    ret
+
+; ------------------------------------------
+; void play_music()
+; toca a musica de fundo
+; ------------------------------------------
+play_music:
+    push a
+
+    ;load a, 2058
+    ;push -1 ; loops
+    ;push a ; music.ogg
+    ;push 2 ; play sound
+    ;int 6 ; call audio
+
+    load a, 2059
+    push -1 ; loops
+    push a ; music.mp3
+    push 2 ; play sound
+    int 6 ; call audio
+
+    pop a
+    ret
+
+; ------------------------------------------
+; bool key(int keycode)
+; a tecla keycode esta pressionada?
+; obs: 0 <= keycode <= 255
+; ------------------------------------------
+key:
+    push bp
+    mov bp, sp
+    push adr
+    push a
+
+    mov adr, bp
+    add adr, 3
+    load a, adr
+    add a, 304
+    load fun, a ; fun = mem[304+keycode]
+
+    pop a
+    pop adr
+    pop bp
+    ret
+
+; ------------------------------------------
+; int elapsed_time()
+; tempo decorrido - dado em ms
+; ------------------------------------------
+elapsed_time:
+    load fun, 288
+    ret
+
+; ------------------------------------------
+; void enable_double_buffering()
+; ativa double buffering
+; ------------------------------------------
+enable_double_buffering:
+    push 4
+    int 7
+    ret
+
+; ------------------------------------------
+; void flip()
+; swap buffers
+; ------------------------------------------
+flip:
+    push 5
+    int 7
+    ret
+
+; ------------------------------------------
+; bool colisao_1()
+; verifica se bolinha colidiu com barrinha #1
+; ------------------------------------------
+colisao_1:
+    push a
+    push b
+    push c
+    push d
+
+    mov fun, false
+
+    load a, 2048  ; a := ball.x
+    load b, 2049  ; b := ball.y
+    load c, 2052  ; c := bar[0].y
+
+    ; colisao no eixo x?
+    sub a, 5
+    fcmp a, 5
+    jge colisao_1_fim
+
+    ; colisao no eixo y?
+    add b, 5
+    fcmp b, c
+    jl colisao_1_fim
+    sub b, 10
+    add c, 100
+    fcmp b, c
+    jge colisao_1_fim
+
+    ; houve colisao
+    mov fun, true
+
+    ; toca som
+    push a
+    ;push 2062 ; "hit.ogg"
+    ;call play_sound
+    ;pop a
+    push 2063 ; "hit.mp3"
+    call play_sound
+    pop a
+    pop a
+
+    colisao_1_fim:
+    pop d
+    pop c
+    pop b
+    pop a
+    ret
+
+; ------------------------------------------
+; bool colisao_2()
+; verifica se bolinha colidiu com barrinha #2
+; ------------------------------------------
+colisao_2:
+    push a
+    push b
+    push c
+    push d
+
+    mov fun, false
+
+    load a, 2048  ; a := ball.x
+    load b, 2049  ; b := ball.y
+    load c, 2054  ; c := bar[1].y
+
+    ; colisao no eixo x?
+    add a, 5
+    fcmp a, 515
+    jl colisao_2_fim
+
+    ; colisao no eixo y?
+    add b, 5
+    fcmp b, c
+    jl colisao_2_fim
+    sub b, 10
+    add c, 100
+    fcmp b, c
+    jge colisao_2_fim
+
+    ; houve colisao
+    mov fun, true
+
+    ; toca som
+    push a
+    ;push 2064 ; "hit.ogg"
+    ;call play_sound
+    ;pop a
+    push 2065 ; "hit.mp3"
+    call play_sound
+    pop a
+    pop a
+
+    colisao_2_fim:
+    pop d
+    pop c
+    pop b
+    pop a
+    ret
+
+; ------------------------------------------
+; void textout(string fontName, int fontSize, int x, int y, string text)
+; mostra um texto
+; ------------------------------------------
+textout:
+    push bp
+    mov bp, sp
+    push adr
+    push a
+
+    mov adr, bp
+    add adr, 7
+    load a, adr
+    push a
+    sub adr, 1
+    load a, adr
+    push a
+    sub adr, 1
+    load a, adr
+    push a
+    sub adr, 1
+    load a, adr
+    push a
+    sub adr, 1
+    load a, adr
+    push a
+    push 17
+    int 7
+
+    pop a
+    pop adr
+    pop bp
+    ret
+
+; ------------------------------------------
+; void color(float r, float g, float b)
+; muda a cor da tinta
+; ------------------------------------------
+color:
+    push bp
+    mov bp, sp
+    push adr
+    push a
+
+    mov adr, bp
+    add adr, 5
+    load a, adr
+    push a          ; red
+    sub adr, 1
+    load a, adr
+    push a          ; green
+    sub adr, 1
+    load a, adr
+    push a          ; blue
+    push 10
+    int 7
+
+    pop a
+    pop adr
+    pop bp
+    ret
+
+; ------------------------------------------
+; void draw()
+; desenha os sprites
+; ------------------------------------------
+draw:
+    push a
+    push b
+
+    ; fundo
+    push 0 ; ypos
+    push 0 ; xpos
+    push "bg.jpg" ; image
+    push 18 ; draw image
+    int 7 ; call video
+
+    ; cor branca
+    push 1.0
+    push 1.0
+    push 1.0
+    call color
+    pop a
+    pop a
+    pop a
+
+    ; tempo decorrido
+    mov c, "tempo: "
+    call elapsed_time
+    div fun, 1000
+    floor fun
+    cat c, fun
+    cat c, "s"
+
+    push c
+    push 310
+    push 197
+    push 16
+    push "times"
+    call textout
+    pop c
+    pop c
+    pop c
+    pop c
+    pop c
+
+    ; pontuacao do jogador 1
+    mov a, 2056
+    load a, a
+    push a
+    push 10
+    push 50
+    push 22
+    push "sans-serif"
+    call textout
+    pop a
+    pop a
+    pop a
+    pop a
+    pop a
+
+    ; pontuacao do jogador 2
+    mov a, 2057
+    load a, a
+    push a
+    push 10
+    push 440
+    push 22
+    push "sans-serif"
+    call textout
+    pop a
+    pop a
+    pop a
+    pop a
+    pop a
+
+    ; bola
+    load a, 2048
+    load b, 2049
+    push b  ; ypos
+    push a  ; xpos
+    push "ball.png" ; image
+    push 18 ; draw image
+    int 7   ; call video
+
+    ; barra #1
+    load a, 2052
+    push a   ; ypos
+    push 0   ; xpos
+    push "bar.png" ; image
+    push 18  ; draw image
+    int 7    ; call video
+
+    ; barra #2
+    load a, 2054
+    push a   ; ypos
+    push 510 ; xpos
+    push "bar.png" ; image
+    push 18  ; draw image
+    int 7    ; call video
+
+    pop b
+    pop a
+    ret
+
+; ------------------------------------------
+; void control_1()
+; controle da barrinha 1
+; ------------------------------------------
+control_1:
+    push a
+    push b
+
+    mov a, 0 ; direcao
+
+    control_1_u:
+    push 38 ; keycode(CIMA) = 38
+    call key
+    pop b
+    lcmp fun, true
+    jne control_1_d
+    add a, -1
+
+    control_1_d:
+    push 40 ; keycode(BAIXO) = 40
+    call key
+    pop b
+    lcmp fun, true
+    jne control_1_m
+    add a, 1
+
+    control_1_m:
+    load b, 2053
+    mul a, b
+    load b, 2052
+    add b, a
+    fcmp b, 0
+    jl control_1_min
+    fcmp b, 240
+    jg control_1_max
+    jmp control_1_fim
+
+    control_1_min:
+    mov b, 0
+    jmp control_1_fim
+
+    control_1_max:
+    mov b, 240
+
+    control_1_fim:
+    store b, 2052
+
+    pop b
+    pop a
+    ret
+
+; ------------------------------------------
+; void control_2()
+; controle da barrinha 2
+; ------------------------------------------
+control_2:
+    push a
+    push b
+
+    load a, 2054
+    add a, 50    ; bar[1].y+50
+    load b, 2049 ; ball.y
+    fcmp a, b
+    jl control_2_d
+
+    control_2_u:
+    load a, 2054
+    load b, 2055
+    sub a, b
+    store a, 2054
+    jmp control_2_m
+
+    control_2_d:
+    load a, 2054
+    load b, 2055
+    add a, b
+    store a, 2054
+
+    control_2_m:
+    pop b
+    pop a
+    ret
+
+; ------------------------------------------
+; void restart()
+; reinicia bolinha
+; ------------------------------------------
+restart:
+    mov a, 260
+    mov b, 170
+    mov c, 5
+    mov d, 5
+
+    store a, 2048   ; mem[2048] = a
+    store b, 2049
+    store c, 2050
+    store d, 2051
+
+    ret
+
+; ------------------------------------------
+; void marca_ponto_1()
+; ponto do jogador 1
+; ------------------------------------------
+marca_ponto_1:
+    push a
+    load a, 2056
+    add a, 1
+    store a, 2056
+    call restart
+    pop a
+
+    push a
+    ;push 2060 ; "score.ogg"
+    ;call play_sound
+    ;pop a
+    push 2061 ; "score.mp3"
+    call play_sound
+    pop a
+    pop a
+
+    ret
+
+; ------------------------------------------
+; void marca_ponto_2()
+; ponto do jogador 2
+; ------------------------------------------
+marca_ponto_2:
+    push a
+    load a, 2057
+    add a, 1
+    store a, 2057
+    call restart
+    pop a
+
+    push a
+    ;push 2060 ; "score.ogg"
+    ;call play_sound
+    ;pop a
+    push 2061 ; "score.mp3"
+    call play_sound
+    pop a
+    pop a
+
+    ret
+
+; ------------------------------------------
+; void disclamer()
+; mensagenzinha...
+; ------------------------------------------
+disclamer:
+    push "ATENCAO: tire o foco da caixa de texto ao lado,\ncaso contrario podera haver lentidao!"
+    push 0
+    int 5
+    ret
+
+; ------------------------------------------
+; void main()
+; funcao principal
+; ------------------------------------------
+main:
+    call alloc_all_voices
+    call play_music
+    call enable_double_buffering
+    call disclamer
+    call restart
+
+    mov a, 10
+    store a, 2053
+    mov a, 3.9
+    store a, 2055
+
+    loop:
+    ; controle das barrinhas
+    call control_1
+    call control_2
+
+    ; carrega posicao da bolinha
+    load a, 2048    ; a = mem[2048]
+    load b, 2049
+    load c, 2050
+    load d, 2051
+
+    ; atualiza posicao da bolinha
+    add a, c
+    add b, d
+
+    fcmp a, -50
+    jl ponto_2
+    fcmp a, 570
+    jg ponto_1
+
+    call colisao_1
+    lcmp fun, true
+    je velx_plus
+    call colisao_2
+    lcmp fun, true
+    je velx_minus
+
+    fcmp b, 20
+    jl vely_plus
+    fcmp b, 320
+    jg vely_minus
+
+    jmp loop_fim
+
+    ponto_1:
+    call marca_ponto_1
+    jmp loop_fim2
+
+    ponto_2:
+    call marca_ponto_2
+    jmp loop_fim2
+
+    velx_plus:
+    mul c, c
+    sqrt c
+    add c, 0.5
+    jmp loop_fim
+
+    velx_minus:
+    mul c, c
+    sqrt c
+    neg c
+    sub c, 0.5
+    jmp loop_fim
+
+    vely_plus:
+    mul d, d
+    sqrt d
+    jmp loop_fim
+
+    vely_minus:
+    mul d, d
+    sqrt d
+    neg d
+    jmp loop_fim
+
+    loop_fim:
+    ; guarda posicao da bolinha
+    store a, 2048
+    store b, 2049
+    store c, 2050
+    store d, 2051
+
+    loop_fim2:
+    ; desenha a tela
+    call draw
+
+    ; double buffering
+    call flip
+
+    ; loop
+    jmp loop
+
+

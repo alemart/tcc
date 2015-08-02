@@ -1,0 +1,73 @@
+<!DOCTYPE html> 
+<html lang="en"> 
+ <head> 
+  <meta charset="utf-8"> 
+  <title>Jasmine Test Runner</title>
+  <link rel="stylesheet" href="lib/jasmine-1.0.1/jasmine.css">
+  <script src="lib/jasmine-1.0.1/jasmine.js"></script>
+  <script src="lib/jasmine-1.0.1/jasmine-html.js"></script>
+  <script src="lib/jquery-1.5/jquery-1.5.min.js"></script> 
+
+  <!-- include source files here... -->
+  <script src="src/ram.js"></script> 
+  <script src="src/media.js"></script> 
+  <script src="src/imageData.js"></script> 
+  <script src="src/audioData.js"></script> 
+  <script src="src/dataMemory.js"></script> 
+
+  <script src="src/instruction.js"></script> 
+  <script src="src/instructionMemory.js"></script> 
+
+  <script src="src/printer.js"></script> 
+  <script src="src/video.js"></script> 
+  <script src="src/audio.js"></script> 
+  <script src="src/keyboard.js"></script> 
+  <script src="src/mouse.js"></script> 
+  <script src="src/io.js"></script> 
+
+  <script src="src/registers.js"></script> 
+  <script src="src/dpu.js"></script> 
+  <script src="src/interruptionManager.js"></script> 
+  <script src="src/controlUnit.js"></script> 
+  <script src="src/clock.js"></script> 
+  <script src="src/cpu.js"></script>
+
+  <script src="src/runtimeEngine.js"></script> 
+
+  <!-- include spec files here... -->
+  <script src="spec/ram.js"></script> 
+  <script src="spec/imageData.js"></script> 
+  <script src="spec/audioData.js"></script> 
+  <script src="spec/dataMemory.js"></script> 
+
+  <script src="spec/instruction.js"></script> 
+  <script src="spec/instructionMemory.js"></script> 
+
+  <script src="spec/printer.js"></script> 
+  <script src="spec/video.js"></script> 
+  <script src="spec/audio.js"></script> 
+  <script src="spec/keyboard.js"></script> 
+  <script src="spec/mouse.js"></script> 
+  <script src="spec/io.js"></script> 
+
+  <script src="spec/registers.js"></script> 
+  <script src="spec/dpu.js"></script> 
+  <script src="spec/interruptionManager.js"></script> 
+  <script src="spec/controlUnit.js"></script> 
+  <script src="spec/clock.js"></script> 
+  <script src="spec/cpu.js"></script>
+
+  <script src="spec/runtimeEngine.js"></script> 
+ </head>
+ <body>
+  <script type="text/javascript">
+jasmine.getEnv().addReporter(new jasmine.TrivialReporter());
+jasmine.getEnv().execute();
+  </script>
+  <div id="outputArea">
+  <pre id="printer"></pre>
+  <canvas id="screen0" width="520" height="340">Oh no! Your browser doesn't support canvas!</canvas>
+  <canvas id="screen1" width="520" height="340">Oh no! Your browser doesn't support canvas!</canvas>
+  </div>
+ </body>
+</html>

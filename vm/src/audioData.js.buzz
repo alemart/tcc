@@ -1,0 +1,117 @@
+//                                        _                      __           
+//    ____ _____ _____ ___  ___ _      __(_)___  ____ __________/ / __________
+//   / __ `/ __ `/ __ `__ \/ _ \ | /| / / /_  / / __ `/ ___/ __  / / ___/ ___/
+//  / /_/ / /_/ / / / / / /  __/ |/ |/ / / / /_/ /_/ / /  / /_/ /_/ /__/ /__  
+//  \__, /\__,_/_/ /_/ /_/\___/|__/|__/_/ /___/\__,_/_/   \__,_/(_)___/\___/  
+// /____/                                                                     
+// 
+// runtime engine
+// Copyright (C) 2011  Alexandre Martins <alemartf(at)gmail(dot)com>
+// 
+
+function AudioData() {
+    // private stuff
+    var _voiceAutoIncrement = 1;
+    var _urlOf = { }; // id -> url map
+    var _voice = { 0: null };
+    var _log = function(text) { alert(text); }; //$("#printer").text($("#printer").text() + "\n" + text); }
+    var _canPlayURL = function(url) {
+        f = { ".ogg": buzz.isOGGSupported, ".wav": buzz.isWAVSupported, ".mp3": buzz.isMP3Supported, ".aac": buzz.isAACSupported };
+        return ( (ext = url.substr(url.lastIndexOf("."))) in f ) ? (f[ext])() : false;
+    };
+
+    // release data
+    this.release = function() {
+        for(var x in _voice) {
+            if(_voice[x] != null)
+                delete _voice[x];
+        }
+        delete _voice;
+
+        _voiceAutoIncrement = 1;
+        _voice = { 0: null };
+        _urlOf = { };
+    }
+
+    // loading audio
+    this.load = function(mediaList, statusCallback, onloadCallback) {
+        // load stuff
+        (function() {
+            var _mediaListInitialLength = mediaList.length;
+            (function(mediaList, unsupportedFiles) {
+                // functional programming style ;)
+                if(mediaList.length > 0) {
+                    // utils
+                    var me = arguments.callee;
+                    var head = mediaList.shift();
+                    var sid = ("" + head["id"]).toLowerCase();
+                    var surl = head["url"];
+                    var proceeded = false;
+                    var _proceed = function() { proceeded = true; me(mediaList, unsupportedFiles); }; // load the next file
+
+                    // status
+                    _urlOf[sid] = surl;
+                    statusCallback({"file": sid, "total": _mediaListInitialLength, "remaining": 1 + mediaList.length});
+
+                    // load sound (hopefully the browser will cache it)
+                    if(buzz.isSupported()) { //_canPlayURL(surl)) {
+                        _voice[sid] = new buzz.sound(surl, { preload: true, autoplay: false, loop: false });
+
+                        _voice[sid].bind("canplaythrough", function() {
+                            _proceed();
+                        }).bind("error", function(e) {
+                            _log("Error while loading media '" + sid + "': " + this.getErrorMessage()); _proceed();
+                        }).bind("timeout", function() {
+                            _log("'" + sid + "' timed out!"); _proceed();
+                        });
+
+                        window.setTimeout(function() { if(!proceeded) _voice[sid].trigger("timeout"); }, 10000);
+                    }
+                    else {
+                        unsupportedFiles.push(sid);
+                        _proceed();
+                    }
+                }
+                else {
+                    // some files won't be played, unfortunately...
+                    if(unsupportedFiles.length > 0) {
+                        var s = "The following audio file" + (unsupportedFiles.length > 0 ? "s" : "") + " cannot be played by this browser in particular:";
+
+                        for(var i=0; i<unsupportedFiles.length; i++)
+                            s += "\n* " + unsupportedFiles[i];
+
+                        _log(s);
+                    }
+
+                    onloadCallback();
+                }
+            })(mediaList, []); // load the media
+        })();
+    }
+
+    // given the voice id, returns a voice object
+    this.getVoice = function(id) {
+        id = parseInt(id);
+        return (id in _voice) ? _voice[id] : null;
+    }
+
+    // spawns a new voice (and return its id), given a filename
+    this.createVoice = function(filename) {
+        if(filename in _urlOf) {
+            _voice[_voiceAutoIncrement] = new buzz.sound(_urlOf[filename], { preload: true, autoplay: false, loop: false });
+            return _voiceAutoIncrement++;
+        }
+        else {
+            _log("Can't create voice: media '" + filename + "' doesn't exist!");
+            return 0; // id of the null voice :)
+        }
+    }
+
+    // destroys an existing voice
+    this.destroyVoice = function(id) {
+        if(id in voice) {
+            if(_voice[id] != null)
+                delete _voice[id];
+        }
+    }
+}

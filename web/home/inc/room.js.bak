@@ -1,0 +1,114 @@
+var roomUtils = {
+
+    // get textarea cursor position
+    getCaretPosition: function(ctrl) {
+        var caretPos = 0;
+
+       	if(document.selection) { // IE
+           	ctrl.focus();
+           	var sel = document.selection.createRange();
+           	sel.moveStart('character', -ctrl.value.length);
+           	caretPos = sel.text.length;
+       	}
+       	else if(ctrl.selectionStart || ctrl.selectionStart == '0') // not IE
+           	caretPos = ctrl.selectionStart;
+
+	   return caretPos;
+    },
+    // set textarea cursor position
+    setCaretPosition: function(ctrl, pos) {
+        if(ctrl.setSelectionRange) {
+            ctrl.focus();
+            ctrl.setSelectionRange(pos,pos);
+        }
+        else if(ctrl.createTextRange) {
+            var range = ctrl.createTextRange();
+            range.collapse(true);
+            range.moveEnd('character', pos);
+            range.moveStart('character', pos);
+            range.select();
+        }
+    },
+
+    // convert cursor coordinates: from textarea to codemirror
+    ta2cm: function(txt, caretPosition) {
+        var row = 0, col = 0;
+        for(var i=0; i<caretPosition; i++) {
+            if(txt[i] == '\n') {
+                row++;
+                col = 0;
+            }
+            else
+                col++;
+        }
+
+        return {'line': row, 'ch': col};
+    },
+
+    // convert cursor coordinates: from codemirror to textarea
+    cm2ta: function(txt, cmCursorPosition) {
+        var cur = 0, row = 0, col = 0, len = txt.length;
+        for(; cur<len && (row != cmCursorPosition.line || col != cmCursorPosition.ch); cur++) {
+            if(txt[cur] == '\n') {
+                row++;
+                col = 0;
+            }
+            else
+                col++;
+        }
+
+        return cur;
+    }
+
+};
+
+// on load...
+$(function() {
+    // codemirror UI
+    var ignoreTextareaChange = false;
+    var textarea = $('#roomdev_code').get(0);
+    var lastCursor = {'line': 0, 'ch': 0};
+    var uiOptions = {
+        path: '../../../inc/cmui/js/',
+        searchMode: 'popup'
+    };
+    var codeMirrorOptions = {
+        mode: 'javascript',
+        lineNumbers: true,
+        enterMode: 'flat',
+        indentUnit: 4,
+        onChange: function(editor) {
+            if(editor) {
+                if(editor.getValue() > 3*65535) {
+                    alert("The code is too long. :(");
+                    editor.setValue(editor.getValue().substr(0, 3*65535));
+                }
+                else {
+                    ignoreTextareaChange = true;
+                    textarea.value = editor.getValue();
+                    ignoreTextareaChange = false;
+                }
+            }
+        },
+        onCursorActivity: function(editor) {
+            var cur = editor.getCursor();
+            lastCursor = cur;
+            //roomUtils.setCaretPosition(textarea, roomUtils.cm2ta(editor.getValue(), cur));
+            //editor.focus();
+        },
+        readOnly: textarea.getAttribute('readonly') == 'readonly' ? 'nocursor' : false
+    };
+    var editor = new CodeMirrorUI(document.getElementById('roomdev_code2'), uiOptions, codeMirrorOptions);
+
+    $('#roomdev_code').change(function() {
+        if(!ignoreTextareaChange) {
+            var cur = lastCursor; //roomUtils.getCaretPosition(this);
+            editor.mirror.setValue(this.value); // this won't call codemirror.onChange()
+            editor.mirror.setCursor(roomUtils.ta2cm(this.value, cur));
+        }
+    });
+
+    // mobwrite
+    mobwrite.syncGateway = $('#roomdev_gw').val();
+    mobwrite.share('roomdev_code');
+});

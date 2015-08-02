@@ -1,0 +1,25 @@
+//                                        _                      __           
+//    ____ _____ _____ ___  ___ _      __(_)___  ____ __________/ / __________
+//   / __ `/ __ `/ __ `__ \/ _ \ | /| / / /_  / / __ `/ ___/ __  / / ___/ ___/
+//  / /_/ / /_/ / / / / / /  __/ |/ |/ / / / /_/ /_/ / /  / /_/ /_/ /__/ /__  
+//  \__, /\__,_/_/ /_/ /_/\___/|__/|__/_/ /___/\__,_/_/   \__,_/(_)___/\___/  
+// /____/                                                                     
+// 
+// runtime engine
+// Copyright (C) 2011  Alexandre Martins <alemartf(at)gmail(dot)com>
+// 
+
+function AudioDevice(ram) {
+    // 0.0 <= vol <= 1.0
+    // loops: 1=play once; 2=play twice; -1=play forever; etc
+    this.play = function(voice, loops) { if(voice != null) { voice.play(); } } //voice.load(); if(loops < 0) { voice.loop().play(); } else { voice.unloop().play(); } } } //voice.play(loops < 0 ? 9999999 : loops); }
+    this.stop = function(voice) { if(voice != null) voice.stop(); }
+    this.pause = function(voice) { if(voice != null) voice.pause(); }
+    this.resume = function(voice) { if(voice != null) voice.play(); }
+    this.setPosition = function(voice, seconds) { if(voice != null) voice.setTime(seconds); }
+    this.getPosition = function(voice) { return (voice != null) ? voice.getTime() : 0.0; } // in seconds
+    this.setVolume = function(voice, volume) { if(voice != null) voice.setVolume(100 * volume); }
+    this.getVolume = function(voice) { return (voice != null) ? 0.01 * voice.getVolume(voice) : 0.5; }
+    this.getDuration = function(voice) { return (voice != null) ? voice.getDuration() : 0.0; } // in seconds
+    this.isPlaying = function(voice) { return (voice != null) ? !voice.isEnded() : false; }
+}

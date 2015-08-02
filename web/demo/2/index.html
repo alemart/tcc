@@ -1,0 +1,334 @@
+<!DOCTYPE html> 
+<html lang="en"> 
+ <head> 
+  <meta charset="utf-8"> 
+  <title>gamewizard.cc</title> 
+  <style> 
+  body { background-color: #fff; font-family: sans-serif; font-size: 12pt; color: #000; }
+  a,a:link,a:visited,a:hover { text-decoration: underline; color: #777; }
+  #space { width: 100%; }
+  #inputArea { width: 50%; float: left; }
+  #outputArea { width: 50%; float: right; }
+  #printer { background-color: #ddf; width: 515px; border-left: 5px solid #aac; }
+  canvas { background-color: #000; position: absolute; visibility: hidden; }
+  </style> 
+  <script src="gwruntime.js"></script> 
+  <script>
+$(document).ready(function() {
+try {
+    var vm = new RuntimeEngine(200, 30000, 65536);
+    var g = {
+        "title": "Hello!",
+        "media": {
+            "ufo.png":             "http://domain/blabla/script.php?uid=7&file=ufo.png",
+            "ufo2.png":            "http://domain/blabla/script.php?uid=7&file=ufo2.png",
+            "song.mp3":            "http://domain/blabla/script.php?uid=7&file=song.mp3"
+        },
+        "program": [1,0,0]
+    };
+
+    $("#compile").click(function() {
+        var debug = $("#debug").is(":checked");
+        vm.powerOff();
+        $("#printer").text("Compilando...");
+        $.post("../../cgi-bin/gwasm", { "code": $("#code").val(), "debug": debug ? "true" : "false" }, function(raw) {
+            try {
+                bin = $.parseJSON(raw);
+                if(bin.status == "ok" && !debug) {
+                    // compiler: success!
+                    $("#printer").text("");
+                    g.program = bin.data;
+                    vm.loadGame(g);
+                    vm.powerOn();
+                }
+                else {
+                    // compiler: error
+                    $("#printer").text(bin.data);
+                }
+            }
+            catch(e) {
+                vm.powerOff();
+                alert("FATAL ERROR\n\n" + e.message);
+            }
+        });
+    });
+}
+catch(e) {
+    vm.powerOff();
+    alert("FATAL ERROR\n\n" + e.message);
+}
+});
+  </script>
+
+ </head> 
+ <body> 
+ 
+  <header> 
+   <h2>Demo #2</h2> 
+  </header> 
+  <hr> 
+ 
+  <section> 
+   <p>Isto foi testado no Google Chrome (<strong>melhor desempenho</strong>), no IE9 e no Firefox 4. Clique em "Compilar" e aguarde.</p>
+   <div id="space"> 
+    <div id="inputArea"> 
+     <form> 
+      <input id="compile" type="button" value="Compilar"><br>
+      <textarea id="code" rows="30" cols="60">; ----------------------------
+; Teste da bolinha
+; ----------------------------
+jmp main
+
+; pilha:
+; [ ... | <BP> | old_bp | return_addr | param_n | param_n-1 | ... | param_1 | ... ]
+; --------------> +x
+
+; void enable_double_buffering()
+enable_double_buffering:
+    push 4
+    int 7
+    ret
+
+; void flip()
+; tecnica de double buffering
+flip:
+    push 5
+    int 7
+    ret
+
+; void textout(string fontName, int fontSize, int x, int y, string text)
+textout:
+    push bp
+    mov bp, sp
+    push adr
+    push a
+
+    ; cor
+    push 0.0
+    push 1.0
+    push 0.0
+    call color
+    pop a
+    pop a
+    pop a
+
+    mov adr, bp
+    add adr, 3
+    load a, adr
+    push a
+    add adr, 1
+    load a, adr
+    push a
+    add adr, 1
+    load a, adr
+    push a
+    add adr, 1
+    load a, adr
+    push a
+    add adr, 1
+    load a, adr
+    push a
+    push 17
+    int 7
+
+    pop a
+    pop adr
+    pop bp
+    ret
+
+; void color(float r, float g, float b)
+color:
+    push bp
+    mov bp, sp
+    push adr
+    push a
+
+    mov adr, bp
+    add adr, 3
+    load a, adr
+    push a          ; blue
+    add adr, 1
+    load a, adr
+    push a          ; green
+    add adr, 1
+    load a, adr
+    push a          ; red
+    push 10
+    int 7
+
+    pop a
+    pop adr
+    pop bp
+    ret
+
+; void draw_ball(int x, int y)
+draw_ball:
+    push bp
+    mov bp, sp
+    push adr
+    push a
+    push b
+    push c
+
+    ; params
+    mov adr, bp
+    add adr, 3
+    load a, adr   ; a := xpos
+    add adr, 1
+    load b, adr   ; b := ypos
+
+    ; ball color
+    mov c, b
+    div c, 340
+    push 1      ; red
+    push c      ; green
+    push 0      ; blue
+    call color
+    pop c
+    pop c
+    pop c
+
+    ; draw ball
+    push 20 ; radius
+    push b  ; ypos
+    push a  ; xpos
+    push 14
+    int 7
+
+    pop c
+    pop b
+    pop a
+    pop adr
+    pop bp
+    ret
+
+; void disclamer()
+disclamer:
+    push "Teste da bolinha ;)"
+    push 0
+    int 5
+    ret
+
+; void main()
+main:
+    call enable_double_buffering
+    call disclamer
+
+    ; mem[2048] = posicao x da bolinha
+    ; mem[2049] = posicao y da bolinha
+    ; mem[2050] = vel x
+    ; mem[2051] = vel y
+    mov a, 260
+    mov b, 170
+    mov c, 5
+    mov d, 5
+
+    store a, 2048   ; mem[2048] = a
+    store b, 2049
+    store c, 2050
+    store d, 2051
+
+    loop:
+    ; carrega posicao da bolinha
+    load a, 2048    ; a = mem[2048]
+    load b, 2049
+    load c, 2050
+    load d, 2051
+
+    ; atualiza posicao da bolinha
+    add a, c
+    add b, d
+    fcmp a, 20
+    jl velx_plus
+    fcmp a, 500
+    jg velx_minus
+    fcmp b, 20
+    jl vely_plus
+    fcmp b, 320
+    jg vely_minus
+    jmp loop_fim
+
+    velx_plus:
+    mul c, c
+    sqrt c
+    jmp loop_fim
+
+    velx_minus:
+    mul c, c
+    sqrt c
+    neg c
+    jmp loop_fim
+
+    vely_plus:
+    mul d, d
+    sqrt d
+    jmp loop_fim
+
+    vely_minus:
+    mul d, d
+    sqrt d
+    neg d
+    jmp loop_fim
+
+    loop_fim:
+    ; guarda posicao da bolinha
+    store a, 2048
+    store b, 2049
+    store c, 2050
+    store d, 2051
+
+    ; desenha bolinha
+    push b
+    push a
+    call draw_ball
+    pop a
+    pop b
+
+    ; desenha outra bolinha
+    neg b
+    add b, 340
+    neg a
+    add a, 520
+    push b
+    push a
+    call draw_ball
+    pop a
+    pop b
+
+    ; texto
+    push "sans-serif"
+    push 36
+    push 10
+    push 10
+    push "Hello!"
+    call textout
+    pop c
+    pop c
+    pop c
+    pop c
+    pop c
+
+    ; double buffering
+    call flip
+
+    ; loop
+    jmp loop
+      </textarea><br>
+      <input id="debug" type="checkbox"> <label for="debug">Apenas pré-processar?</label>
+     </form> 
+    </div> 
+    <div id="outputArea"> 
+     <pre id="printer"></pre>
+     <canvas id="screen0" width="520" height="340">Oh no! Your browser doesn't support canvas!</canvas>
+     <canvas id="screen1" width="520" height="340"></canvas>
+    </div> 
+   </div> 
+   <br clear="all"><hr>
+  </section> 
+ 
+  <footer> 
+   Data: 13/04/2011 - <a href="http://www.linux.ime.usp.br/~alemart">Alexandre Martins</a> - <a href="http://gamewizard.cc">gamewizard.cc</a> 
+  </footer>  
+ 
+ </body> 
+</html> 

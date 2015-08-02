@@ -1,0 +1,202 @@
+//                                        _                      __           
+//    ____ _____ _____ ___  ___ _      __(_)___  ____ __________/ / __________
+//   / __ `/ __ `/ __ `__ \/ _ \ | /| / / /_  / / __ `/ ___/ __  / / ___/ ___/
+//  / /_/ / /_/ / / / / / /  __/ |/ |/ / / / /_/ /_/ / /  / /_/ /_/ /__/ /__  
+//  \__, /\__,_/_/ /_/ /_/\___/|__/|__/_/ /___/\__,_/_/   \__,_/(_)___/\___/  
+// /____/                                                                     
+// 
+// runtime engine
+// Copyright (C) 2011  Alexandre Martins <alemartf(at)gmail(dot)com>
+// 
+
+function VideoDevice(ram) {
+    // canvas
+    var _me = this;
+    var _frontBuffer = 0;
+    var _doubleBuffering = false;
+    var _jqcanvas = function() { return $("#screen" + (_doubleBuffering ? 1 - _frontBuffer : _frontBuffer)); }
+    var _canvas = function() { return _jqcanvas()[0]; }
+    var _canvasContext = function() { return _canvas().getContext("2d"); }
+    var _checkCanvasValidity = function() { if(!(_canvas() && _canvasContext())) throw new Error("Invalid canvas!"); }
+    _checkCanvasValidity();
+    _canvas().style.visibility = "visible"; // the front buffer must be visible
+
+    // ink
+    var _ink = { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+    var _updateInk = function(r,g,b,a) {
+        _ink.r = Math.min(1.0, Math.max(0.0, parseFloat(r)));
+        _ink.g = Math.min(1.0, Math.max(0.0, parseFloat(g)));
+        _ink.b = Math.min(1.0, Math.max(0.0, parseFloat(b)));
+        _ink.a = Math.min(1.0, Math.max(0.0, parseFloat(a)));
+
+        for(var i=0; i<2; i++) {
+            var ctx = _canvasContext();
+            var style = "rgba(" + parseInt(_ink.r*255) + "," + parseInt(_ink.g*255) + "," + parseInt(_ink.b*255) + "," + _ink.a + ")";
+
+            ctx.fillStyle = style;
+            ctx.strokeStyle = style;
+
+            _frontBuffer = 1 - _frontBuffer;
+        }
+    }
+    _updateInk(_ink.r, _ink.g, _ink.b, _ink.a); // initialize
+
+    // transformations
+    var _transformData = { translationX: 0.0, translationY: 0.0, scaleX: 1.0, scaleY: 1.0, rotationAngle: 0.0 };
+    var _setTransform = function(translationX, translationY, scaleX, scaleY, rotationAngle) {
+        _transformData.translationX = parseFloat(translationX);
+        _transformData.translationY = parseFloat(translationY);
+        _transformData.scaleX = parseFloat(scaleX);
+        _transformData.scaleY = parseFloat(scaleY);
+        _transformData.rotationAngle = parseFloat(rotationAngle); // clockwise rotation angle, in radians
+
+        var sx = _transformData.scaleX;
+        var sy = _transformData.scaleY;
+        var dx = _transformData.translationX;
+        var dy = _transformData.translationY;
+        var c = Math.cos(_transformData.rotationAngle);
+        var s = Math.sin(_transformData.rotationAngle);
+
+        for(var i=0; i<2; i++) {
+            // yeah, I made the calculations...
+            _canvasContext().setTransform(sx*c, sy*s, -sx*s, sy*c, dx, dy);
+            _frontBuffer = 1 - _frontBuffer;
+        }
+    }
+
+    // observer pattern
+    var _observerCollection = [];
+    var _notifyObservers = function(args) {
+        _observerCollection.forEach(function(item) { item.notify(_me, args); });
+    }
+    this.registerObserver = function(observer) {
+        if(!(observer in _observerCollection))
+            _observerCollection.push(observer);
+    }
+
+    // mouse cursor events
+    for(var i=0; i<2; i++) {
+        _jqcanvas().mousemove(function(ev) {
+            var x = ev.pageX - this.offsetLeft;
+            var y = ev.pageY - this.offsetTop;
+            _notifyObservers({msg:"mousemove", xpos:x, ypos:y});
+        }).mousedown(function(ev) {
+            _notifyObservers({msg:"mousedown",button:ev.which});
+        }).mouseup(function(ev) {
+            _notifyObservers({msg:"mouseup",button:ev.which});
+        });
+
+        _frontBuffer = 1 - _frontBuffer;
+    }
+
+    // public methods
+    this.canvasWidth = function() { return _canvas().width; }
+    this.canvasHeight = function() { return _canvas().height; }
+    this.setColor = function(r,g,b) { _updateInk(r,g,b,_ink.a); }
+    this.setAlpha = function(a) { _updateInk(_ink.r,_ink.g,_ink.b,a); } // 0.0 (transparent) <= a <= 1.0 (opaque)
+    this.cls = function() { _canvasContext().clearRect(0, 0, this.canvasWidth(), this.canvasHeight()); }
+    this.drawImage = function(img, x, y) { _canvasContext().drawImage(img, x, y); }
+    this.drawScaledImage = function(img, x, y, w, h) { _canvasContext().drawImage(img, x, y, w, h); }
+    this.drawClippedImage = function(img, sx, sy, sw, sh, x, y, w, h) { _canvasContext().drawImage(img, sx, sy, sw, sh, x, y, w, h); }
+    this.setTranslation = function(translationX, translationY) { _setTransform(translationX, translationY, _transformData.scaleX, _transformData.scaleY, _transformData.rotationAngle); }
+    this.setScale = function(scaleX, scaleY) { _setTransform(_transformData.translationX, _transformData.translationY, scaleX, scaleY, _transformData.rotationAngle); }
+    this.setRotation = function(rotationAngle) { _setTransform(_transformData.translationX, _transformData.translationY, _transformData.scaleX, _transformData.scaleY, rotationAngle); }
+
+    // double buffering
+    this.enableDoubleBuffering = function() {
+        if(!_doubleBuffering) {
+            _doubleBuffering = true;
+            _checkCanvasValidity();
+            _notifyObservers({msg:"enabled double buffering"});
+        }
+    }
+    this.disableDoubleBuffering = function() {
+        if(_doubleBuffering) {
+            // hide buffers
+            _canvas().style.visibility = "hidden";
+            _me.cls();
+            _frontBuffer = 1 - _frontBuffer;
+            _canvas().style.visibility = "hidden";
+            _me.cls();
+
+            // disable double buffering
+            _doubleBuffering = false;
+            _frontBuffer = 0;
+
+            // display front buffer
+            _canvas().style.visibility = "visible";
+
+            // notify observers
+            _notifyObservers({msg:"disabled double buffering"});
+        }
+    }
+    this.isDoubleBufferingEnabled = function() {
+        return _doubleBuffering;
+    }
+    this.flip = function() {
+        // swap buffers
+        _canvas().style.visibility = "visible";
+        _frontBuffer = 1 - _frontBuffer;
+        _canvas().style.visibility = "hidden";
+
+        // clear back buffer
+        //_me.cls();
+
+        // notify observers
+        _notifyObservers({msg:"flipped"});
+    }
+
+    // text drawing
+    this.textout = function(fontName, fontSize, x, y, text) {
+        var ctx = _canvasContext();
+        ctx.font = (parseInt(fontSize) + "pt ") + fontName;
+        ctx.textBaseline = "top";
+        ctx.fillText(text, parseInt(x)-0.5, parseInt(y)-0.5);
+    }
+
+    // primitive drawing
+    this.rectfill = function(x, y, w, h) {
+        var ctx = _canvasContext();
+        ctx.beginPath();
+        ctx.rect(parseInt(x)-0.5, parseInt(y)-0.5, parseInt(w)+0.5, parseInt(h)+0.5);
+        ctx.closePath();
+        ctx.fill();
+    }
+    this.rect = function(x, y, w, h) {
+        var ctx = _canvasContext();
+        ctx.beginPath();
+        ctx.rect(parseInt(x)-0.5, parseInt(y)-0.5, parseInt(w)+0.5, parseInt(h)+0.5);
+        ctx.closePath();
+        ctx.stroke();
+    }
+    this.circlefill = function(x, y, r) {
+        var ctx = _canvasContext();
+        ctx.beginPath();
+        ctx.arc(parseInt(x)-0.5, parseInt(y)-0.5, parseInt(r)+0.5, 0, 2*Math.PI, true);
+        ctx.closePath();
+        ctx.fill();
+    }
+    this.circle = function(x, y, r) {
+        var ctx = _canvasContext();
+        ctx.beginPath();
+        ctx.arc(parseInt(x)-0.5, parseInt(y)-0.5, parseInt(r)+0.5, 0, 2*Math.PI, true);
+        ctx.closePath();
+        ctx.stroke();
+    }
+    this.line = function(x1, y1, x2, y2) {
+        var ctx = _canvasContext();
+        ctx.beginPath();
+        ctx.moveTo(parseInt(x1)-0.5, parseInt(y1)-0.5);
+        ctx.lineTo(parseInt(x2)-0.5, parseInt(y2)-0.5);
+        ctx.closePath();
+        ctx.stroke();
+    }
+
+    // reset?
+    this.reset = function() {
+        _setTransform(0.0, 0.0, 1.0, 1.0, 0.0);
+        _updateInk(1.0, 1.0, 1.0, 1.0);
+        _me.disableDoubleBuffering();
+        _me.cls();
+    }
+}

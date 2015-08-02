@@ -1,0 +1,132 @@
+#lobby_wrap {
+    width: 100%;
+    border: 0;
+    padding: 0;
+    border-spacing: 0;
+    margin: 15px 0 0 0;
+}
+
+table#lobby_wrap td:first-child {
+    width: 300px;
+    vertical-align: top;
+    padding: 0;
+}
+
+#lobby_wrap td:last-child {
+    width: 100%;
+    vertical-align: top;
+    padding: 0;
+}
+
+/* ------------------------ */
+
+#newroom_container {
+    width: 300px;
+    border-radius: 5px;
+    font-weight: bold;
+    background-color: #375173;
+    box-shadow: 5px 5px 5px #264062;
+    color: #fff;
+    padding: 10px;
+}
+
+#newroom_container > div:first-child {
+    text-align: center;
+}
+
+#newroom_container > div:last-child {
+    display: none;
+}
+
+#newroom_container > div:last-child table {
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+}
+
+#newroom_container > div:last-child table tr > td:first-child {
+    width: 30%;
+    vertical-align: top;
+    padding-top: 5px;
+}
+
+#newroom_container > div:last-child table td:last-child {
+    font-size: small;
+    font-weight: normal;
+}
+
+#newroom_container > div:last-child table > tbody#opt {
+    display: none;
+}
+
+#newroom_container > div:last-child table > tbody#end {
+    padding-top: 30px;
+}
+
+#newroom_container > div:last-child table > tbody#end > tr > td {
+    padding-top: 20px;
+    text-align: center;
+}
+
+#newroom_container .text {
+    background-color: #fff;
+    color: #24344a;
+    border: 0;
+    border-radius: 2px;
+    width: 100%;
+    margin-top: 5px;
+    font-family: sans-serif;
+}
+
+/* ------------------------ */
+
+#roomlist_container {
+    margin-left: 15px;
+    padding: 10px;
+    border-radius: 5px;
+    background-color: #375173;
+    box-shadow: 5px 5px 5px #264062;
+}
+
+#roomlist_container > ul {
+    list-style-type: none;
+    list-style-position: outside;
+    padding: 0;
+}
+
+#roomlist_container > ul > li {
+    border-bottom: 1px solid #597395;
+    padding: 20px 0 20px 0;
+}
+
+#roomlist_container > ul > li:first-child {
+    padding-top: 0;
+}
+
+#roomlist_container > ul > li:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+#roomlist_container table {
+    width: 100%;
+    border: 0;
+}
+
+#roomlist_container table td:first-child {
+    width: 100%;
+}
+
+#roomlist_container table td:last-child {
+    text-align: right;
+    vertical-align: middle;
+}
+
+.roomPassword {
+    display: none;
+    text-align: center;
+}
+
+.roomPassword .response {
+    display: none;
+}
